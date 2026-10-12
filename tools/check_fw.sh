@@ -3,6 +3,7 @@
 # (model/rvsim.c) must produce exactly the host render's audio, for every mode.
 #   tools/check_fw.sh [seconds] [firmware]     (default 60 s, src/fpga/core/cpu/composer.hex)
 #   PRESS=45:RIGHT,90:A tools/check_fw.sh ...   scripted buttons
+#   SET=20:MODE=tides,40:RESEED=1 tools/check_fw.sh ...   scripted menu changes
 set -uo pipefail
 cd "$(dirname "$0")/.."
 SECS=${1:-60}
@@ -10,6 +11,7 @@ FW=${2:-src/fpga/core/cpu/composer.hex}
 EXE=${EXE-}
 mkdir -p build/fwcheck
 PARGS=(); [ -n "${PRESS:-}" ] && PARGS=(--press "$PRESS")
+[ -n "${SET:-}" ] && PARGS+=(--set "$SET")
 for m in drift tides hush mother; do
   ( ./build/rvsim$EXE --fw "$FW" --mode $m --seed 123 --seconds "$SECS" "${PARGS[@]}" \
       --out build/fwcheck/$m.rv.raw > build/fwcheck/$m.log

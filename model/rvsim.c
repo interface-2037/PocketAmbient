@@ -8,7 +8,7 @@
  *
  * Options (same meaning and defaults as render): --mode --seed --density --brightness
  *   --reverb --sleep --seconds/--minutes --press SEC:BTN[,...] --no-autostart
- *   --out FILE (raw s16le stereo)   --quiet
+ *   --set SEC:NAME=VAL[,...] (menu changes, model/setscript.h)   --out FILE (raw s16le stereo)   --quiet
  *   --profile N (PC histogram of tick N on stderr)   --eng-cycles N (FIFO estimate, default 700)
  * Prints instructions per tick (max / mean), an estimate of PicoRV32 cycles and the
  * deepest stack use.
@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "synth_model.h"
+#include "setscript.h"
 
 #define RAM_BYTES 65536u
 
@@ -46,6 +47,8 @@ static double   max_lag;
 typedef struct { uint64_t tick; uint32_t mask; } press_t;
 static press_t presses[4096];
 static int npress, pi_next;
+static setscript_t sets[4096];
+static int nset, si_next;
 
 static uint32_t btn_mask(const char *s)
 {
@@ -77,6 +80,7 @@ static int cmp_press(const void *a, const void *b)
 static void deliver_presses(void)
 {
     while (pi_next < npress && presses[pi_next].tick <= tick) ctrl[CR_BTN_EVENTS] |= presses[pi_next++].mask;
+    setscript_apply(sets, nset, &si_next, tick, ctrl);
 }
 
 static void fail(const char *what, uint32_t a)
@@ -394,6 +398,7 @@ int main(int argc, char **argv)
             }
             free(s);
         }
+        else if (ARG("--set")) nset = setscript_parse(v, sets, nset, 4096);
         else if (ARG("--profile")) prof_tick = atoll(v);
         else if (ARG("--eng-cycles")) eng_cycles = strtoull(v, NULL, 0);
         else if (!strcmp(o, "--no-autostart")) autostart = 0;

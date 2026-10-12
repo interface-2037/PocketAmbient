@@ -19,8 +19,9 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 | 1: C model + composer + renderer | done; signed off after listening round 3 (2026-10-10) |
 | 2: voice engine RTL | done; bit-exact vs the C model (Icarus) |
 | 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12), one open item: tick overruns (docs/TEST_REPORT.md) |
-| **4: CPU integration** | **in progress:** firmware bit-exact on the ISS and in the full-system RTL sim; v0.3.0 hardware test next |
-| 5–6: controls/video, timing/soak | not started |
+| **4: CPU integration** | **done in simulation** (bit-exact ISS + full-system RTL, SD firmware loading); v0.3.0 hardware test next |
+| **5: controls, menu, video** | **in progress:** core menu done in simulation (D51); video next |
+| 6: timing closure, soak | not started |
 
 ## Layout
 
@@ -48,6 +49,8 @@ make fw                     # build/fw/composer.elf, .bin, .map -> src/fpga/core
 tools/check_fw.sh 60        # firmware on the ISS == host render, all modes (needs make)
 sim/run_sys.sh 60           # Verilator: CPU + firmware + engine == host render (slow: ~1 MHz)
 ```
+
+Packaging (after the Quartus build): `python tools/package.py` makes the release zip (firmware inside the bitstream). `python tools/package.py --dev` makes a dev zip that also loads `Assets/ambient/common/composer.bin` from the SD card: after `make fw`, copying the new `composer.bin` there is enough to try new music, with no Quartus rebuild (DECISIONS D50).
 
 ## Building and running (host)
 
@@ -97,10 +100,10 @@ On Linux/WSL2 use `make` and `./build/render`. `tools/run_validation.sh full` ru
 | Y | Info overlay |
 | Select | Speaker EQ (reserved, v2) |
 
-Menu settings (`interact.json`): mode, density, brightness, reverb Low/Med/High, visuals, lock seed + seed value, sleep timer Off/30/60/90 min, and a Reseed action.
+Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/High, visuals, sleep timer Off/30/60/90 min, Lock seed (keeps the piece playing now for the next boot) + the seed value, and a Reseed action. The menu shows live values, so button changes appear there too, and settings persist.
 
 ## Known limitations
 
-- The current hardware build (v0.3.0) is a system test: the composer plays live, but settings are fixed (DRIFT, seed 123) and the screen shows diagnostics. The menu, settings and the real UI come in Phase 5.
+- The current hardware build (v0.3.0) is a system test: the composer plays live with the buttons and the core menu, and the screen shows diagnostics. The real per-mode screens come next (Phase 5).
 - Known issue from Phase 3: the frame-tick overrun counter saturated on hardware (docs/TEST_REPORT.md). v0.3.0 measures the frame-tick spacing directly.
 - The host renderer runs at ~90–140× realtime (spec target 200×). See docs/DECISIONS.md D14.

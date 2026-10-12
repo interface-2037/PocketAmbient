@@ -4,6 +4,7 @@
 #   sim/run_sys.sh [seconds] [modes...]       (default 60 s, all four modes)
 #   FAST=1 sim/run_sys.sh ...                  frame ticks as fast as the FIFO allows
 #   PRESS=45:RIGHT,90:A sim/run_sys.sh ...      scripted buttons (render --press syntax)
+#   SET=20:MODE=tides,40:RESEED=1 sim/run_sys.sh ...   scripted menu changes (model/setscript.h)
 # Needs: make (build/render), make fw (src/fpga/core/cpu/composer.hex), verilator >= 5.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -20,6 +21,7 @@ verilator --cc --exe --build -j 0 -O3 --x-assign fast --x-initial fast --noasser
   "$PWD/sim/tb/sim_sys.cpp" $F/cpu/cpu_sys.sv $F/cpu/picorv32.v $F/synth/audio_engine.sv \
   $F/synth/voice_engine.sv $F/synth/fx_engine.sv > sim/out/sys_build.log 2>&1 || { tail -20 sim/out/sys_build.log; exit 1; }
 PARGS=(); [ -n "${PRESS:-}" ] && PARGS=(--press "$PRESS")
+[ -n "${SET:-}" ] && PARGS+=(--set "$SET")
 for m in $MODES; do
   ( "$RENDER" --mode $m --seed $SEED --seconds "$SECS" "${PARGS[@]}" --out sim/out/sys_$m.ref.raw --quiet
     cd src/fpga && ../../$OBJ/Vcpu_sys --mode $m --seed $SEED --seconds "$SECS" "${PARGS[@]}" ${FAST:+--fast} \

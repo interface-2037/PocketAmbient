@@ -303,6 +303,8 @@ assign aux_scl = 1'bZ;
 assign vpll_feed = 1'bZ;
 
 
+    wire    [31:0]  settings_rd_data;
+
 // for bridge write data, we just broadcast it to all bus devices
 // for bridge read data, we have to mux it
 // add your own devices here
@@ -315,6 +317,9 @@ always @(*) begin
         // example
         // bridge_rd_data <= example_device_data;
         bridge_rd_data <= 0;
+    end
+    32'h50xxxxxx: begin
+        bridge_rd_data <= settings_rd_data;     // core menu (settings_bridge.sv, interact.json)
     end
     32'hF8xxxxxx: begin
         bridge_rd_data <= cmd_bridge_rd_data;
@@ -663,6 +668,12 @@ end
 sys_test et (
     .clk        ( clk_74a ),
     .reset_n    ( reset_n ),
+    .bridge_wr  ( bridge_wr ),
+    .bridge_rd  ( bridge_rd ),
+    .bridge_addr ( bridge_addr ),
+    .bridge_wr_data ( bridge_wr_data ),
+    .settings_rd_data ( settings_rd_data ),
+    .rtc_epoch  ( rtc_epoch_seconds ),
     .cont1_key  ( cont1_key ),
     .tick       ( frame_tick ),
     .pcm_l      ( pcm_l ),

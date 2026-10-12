@@ -90,4 +90,10 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 | 15 | TICK_CYCLES | engine → CPU | CPU cycles used by the previous tick (diagnostic) |
 | 16–25 | ST_* | CPU → video/bridge | state, mode, elapsed s, seed, density, brightness, visuals, overlay, reverb, sleep |
 
-The bridge (APF) address range for these registers is **[VERIFY]**. It will mirror words 0–9 and 16–25.
+## Bridge (APF) addresses
+
+| Address | Use |
+|---|---|
+| `0x2000_0000`–`0x2000_FFFF` | Composer firmware data slot (dev builds, D50): writes CPU RAM while the core is in reset; words byte-swapped from the bridge's big-endian order |
+| `0x5000_0000` + 4·k | Core menu (D51, `pkg/interact.json`): k = 0 Mode, 1 Density, 2 Brightness, 3 Reverb, 4 Visuals, 5 Lock seed, 6 Seed, 7 Sleep, 8 Reseed (action). Reads return the composer's live value. |
+| `0xF8xx_xxxx` | APF command block (template `core_bridge_cmd.v`) |

@@ -1,17 +1,25 @@
-// sys_test.sv - Phase 4 hardware test (v0.3.x), all in clk_74a: the real composer firmware on
+// sys_test.sv - Phase 4/5 hardware test (v0.3.x), all in clk_74a: the real composer firmware on
 // the PicoRV32 drives the audio engine (cpu_sys), with the Pocket's buttons wired to the
-// composer and a diagnostics screen. Settings are fixed until the menu arrives in Phase 5:
-// DRIFT, density 3, brightness 3, reverb Med, seed locked to 123 (so the first piece matches
-// `render --mode drift --seed 123`).
+// composer, the core menu (settings_bridge, pkg/interact.json) and a diagnostics screen.
+// Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
 //
 // Screen: mode / state from the composer, uptime, worst CPU cycles per tick, lowest FIFO
 // level, FIFO underruns, shortest / longest gap between I2S frame ticks (clk_74a cycles;
 // nominal 1546-1547, this is the Phase 3 overrun diagnostic), and CPU trap / bus error.
 `default_nettype none
 
-module sys_test (
+module sys_test #(
+    parameter FW_HEX = "core/cpu/composer.hex"
+) (
     input  wire        clk,
     input  wire        reset_n,
+    // APF bridge (clk_74a): firmware data slot writes to 0x2000_0000..0x2000_FFFF (D50)
+    input  wire        bridge_wr,
+    input  wire        bridge_rd,
+    input  wire [31:0] bridge_addr,
+    input  wire [31:0] bridge_wr_data,
+    output wire [31:0] settings_rd_data,   // bridge reads of 0x5000_00xx (menu)
+    input  wire [31:0] rtc_epoch,
     input  wire [31:0] cont1_key,
     input  wire        tick,               // 48 kHz frame tick (start of a stereo frame)
     output wire [15:0] pcm_l,
@@ -38,6 +46,19 @@ module sys_test (
     always @(posedge clk) begin k0 <= cont1_key[15:0]; k1 <= k0; k2 <= k1; end
     wire [15:0] btn_edge = rst ? 16'd0 : (k1 & ~k2);
 
+    // ------------------------------------------------------------- firmware from the SD card
+    // The APF loads data slots while the core is held in reset (before Reset Exit). Bridge words
+    // arrive big-endian (bridge_endian_little = 0), so file bytes 0..3 are in [31:24]..[7:0];
+    // RISC-V words are little-endian. [VERIFY] on hardware: a wrong order shows as CPU TRAP.
+    reg         fw_we;
+    reg  [13:0] fw_addr;
+    reg  [31:0] fw_data;
+    always @(posedge clk) begin
+        fw_we <= bridge_wr && bridge_addr[31:16] == 16'h2000;
+        fw_addr <= bridge_addr[15:2];
+        fw_data <= {bridge_wr_data[7:0], bridge_wr_data[15:8], bridge_wr_data[23:16], bridge_wr_data[31:24]};
+    end
+
     // ------------------------------------------------------------- system
     wire        m_req, m_we, m_ack;
     wire [16:0] m_addr;
@@ -47,18 +68,34 @@ module sys_test (
         .sram_a(sram_a), .sram_dq(sram_dq), .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n),
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n));
 
-    wire [31:0] st_state, st_mode, tick_cyc, tick_cyc_max;
+    wire [31:0] st_state, st_mode, st_seed, st_density, st_bright, st_visuals, st_reverb, st_sleep;
+    wire [31:0] tick_cyc, tick_cyc_max;
+    wire        st_valid;
+    wire  [2:0] cfg_mode, cfg_density, cfg_bright;
+    wire  [1:0] cfg_reverb, cfg_visuals, cfg_sleep;
+    wire        cfg_seed_lock, cmd_reseed;
+    wire [31:0] cfg_seed, settings_seq;
+    settings_bridge u_set (.clk(clk), .bridge_wr(bridge_wr), .bridge_rd(bridge_rd),
+        .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data), .bridge_rd_data(settings_rd_data),
+        .st_valid(st_valid), .st_mode(st_mode[2:0]), .st_density(st_density[2:0]), .st_bright(st_bright[2:0]),
+        .st_reverb(st_reverb[1:0]), .st_visuals(st_visuals[1:0]), .st_sleep(st_sleep[1:0]), .st_seed(st_seed),
+        .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
+        .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
+        .settings_seq(settings_seq), .cmd_reseed(cmd_reseed));
     wire [63:0] tick_n;
     wire [15:0] underruns;
     wire [10:0] fifo_min, fifo_level;
     wire        primed, bus_err, trap;
-    cpu_sys u_sys (.clk(clk), .rst(rst),
-        .cfg_mode(3'd0), .cfg_density(3'd3), .cfg_bright(3'd3), .cfg_reverb(2'd1), .cfg_visuals(2'd0),
-        .cfg_seed_lock(1'b1), .cfg_seed(32'd123), .cfg_sleep(2'd0), .cmd_reseed(1'b0),
-        .settings_seq(32'd0), .rtc_epoch(32'd0), .btn_edge(btn_edge),
+    cpu_sys #(.FW_HEX(FW_HEX)) u_sys (.clk(clk), .rst(rst),
+        .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
+        .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
+        .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .rtc_epoch(rtc_epoch), .btn_edge(btn_edge),
+        .fw_we(fw_we), .fw_addr(fw_addr), .fw_data(fw_data),
         .frame_tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
         .mem_req(m_req), .mem_we(m_we), .mem_addr(m_addr), .mem_wd(m_wd), .mem_ack(m_ack), .mem_rd(m_rd),
-        .st_state(st_state), .st_mode(st_mode), .st_elapsed(), .st_seed(),
+        .st_state(st_state), .st_mode(st_mode), .st_elapsed(), .st_seed(st_seed), .st_density(st_density),
+        .st_bright(st_bright), .st_visuals(st_visuals), .st_overlay(), .st_reverb(st_reverb), .st_sleep(st_sleep),
+        .st_valid(st_valid),
         .tick(tick_n), .tick_cycles(tick_cyc), .tick_cycles_max(tick_cyc_max), .underruns(underruns),
         .fifo_min(fifo_min), .fifo_level(fifo_level), .primed(primed), .bus_err(bus_err), .trap(trap),
         .smp_valid(), .smp_l(), .smp_r());

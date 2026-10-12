@@ -1,0 +1,17 @@
+{
+    "data": {
+        "magic": "APF_VER_1",
+        "data_slots": [
+            {
+                "name": "Composer firmware",
+                "id": 0,
+                "required": true,
+                "parameters": "0x0",
+                "extensions": ["bin"],
+                "filename": "composer.bin",
+                "address": "0x20000000",
+                "size_maximum": "0x10000"
+            }
+        ]
+    }
+}

@@ -10,6 +10,7 @@
  *   --events FILE.csv          composer trace (tick,kind,a,b,c)
  *   --press SEC:BTN[,SEC:BTN]  scripted buttons (A B X Y L R UP DOWN LEFT RIGHT START SELECT)
  *   --script FILE              lines of "SEC BTN"
+ *   --set SEC:NAME=VAL[,...]   menu changes (model/setscript.h), e.g. 60:MODE=tides,90:RESEED=1
  *   --tick-start N             initial tick counter (overflow tests)
  *   --no-autostart             don't press A at the start
  *   --fade-end                 press A 4 s before the end so the file ends in silence
@@ -25,10 +26,13 @@
 #include "synth_model.h"
 #include "../fw/hal/hal_model.h"
 #include "../fw/composer/composer.h"
+#include "setscript.h"
 
 typedef struct { uint64_t tick; uint32_t mask; } press_t;
 static press_t g_press[4096];
 static int g_npress;
+static setscript_t g_set[4096];
+static int g_nset;
 
 static uint32_t btn_mask(const char *s)
 {
@@ -197,6 +201,7 @@ int main(int argc, char **argv)
         else if (ARG("--events")) ev_path = v;
         else if (ARG("--press")) { char *s = malloc(strlen(v) + 1); strcpy(s, v); parse_press_list(s); free(s); }
         else if (ARG("--script")) load_script(v);
+        else if (ARG("--set")) g_nset = setscript_parse(v, g_set, g_nset, 4096);
         else if (ARG("--tick-start")) tick0 = strtoull(v, NULL, 0);
         else if (ARG("--from")) from_ms = parse_ms(v);
         else if (ARG("--vectors")) vec_prefix = v;
@@ -247,12 +252,20 @@ int main(int argc, char **argv)
     out_open(&out, out_path);
     static int16_t buf[4096 * 2];
     size_t nb = 0;
-    int pi = 0;
+    int pi = 0, si = 0;
     uint32_t max_sram = 0;
     clock_t t_start = clock();
 
     for (uint64_t t = 0; t < dur_ms; t++) {
         while (pi < g_npress && g_press[pi].tick <= t) halm_press(g_press[pi++].mask);
+        while (si < g_nset && g_set[si].tick <= t) {
+            const setscript_t *q = &g_set[si++];
+            if (q->reg == SET_RESEED) halm_ctrl_set(CR_CMD, halm_ctrl_get(CR_CMD) | 1u);
+            else if (halm_ctrl_get(q->reg) != q->val) {
+                halm_ctrl_set(q->reg, q->val);
+                halm_ctrl_set(CR_SETTINGS_SEQ, halm_ctrl_get(CR_SETTINGS_SEQ) + 1u);
+            }
+        }
         halm_set_tick(tick0 + t);
         composer_tick();
         for (unsigned k = 0; k < AP_TICK_SAMPLES; k++) {

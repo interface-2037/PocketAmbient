@@ -3,7 +3,7 @@
 // audio FIFO is written out, to compare bit-for-bit with model/render (sim/run_sys.sh).
 //
 //   obj_dir/Vcpu_sys --mode drift --seed 123 --seconds 60 --out x.raw [--press SEC:BTN,...]
-//                    [--no-autostart] [--fast] [--rd 10 --wr 8]
+//                    [--set SEC:NAME=VAL,...] [--no-autostart] [--fast] [--rd 10 --wr 8]
 //
 // Run from src/fpga (tables and firmware load relative to it, like Quartus).
 // SRAM: behavioural, ack after --rd / --wr cycles (default 10 / 8 = sram_ctrl at (6,5)),
@@ -11,6 +11,9 @@
 // --fast as often as the FIFO allows (same samples, about 2x faster).
 // Buttons follow render's timing: a press at tick t is visible to composer_tick(t), so the
 // edge is pulsed while the tick counter is t - 1 (presses at tick 0 are not supported).
+// Menu changes (--set, model/setscript.h) drive the cfg_* / settings_seq ports as soon as the
+// tick counter reaches t (the CPU reads them during composer_tick(t)); RESEED pulses cmd_reseed
+// at t - 1 like a button.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,6 +23,7 @@
 #include <algorithm>
 #include "Vcpu_sys.h"
 #include "verilated.h"
+#include "../../model/setscript.h"
 
 struct Press { uint64_t tick; uint32_t mask; };
 
@@ -42,6 +46,8 @@ int main(int argc, char **argv)
     uint64_t dur_ms = 1000;
     int autostart = 1, fast = 0, rd_lat = 10, wr_lat = 8;
     std::vector<Press> presses;
+    static setscript_t sets[4096];
+    int nset = 0;
     for (int i = 1; i < argc; i++) {
         const char *o = argv[i], *v = i + 1 < argc ? argv[i + 1] : "";
 #define ARG(n) (!strcmp(o, n) && ++i < argc)
@@ -69,6 +75,7 @@ int main(int argc, char **argv)
                 presses.push_back({(uint64_t)(atof(t) * 1000.0 + 0.5), btn_mask(c + 1)});
             }
         }
+        else if (ARG("--set")) nset = setscript_parse(v, sets, nset, 4096);
         else if (!strcmp(o, "--no-autostart")) autostart = 0;
         else if (!strcmp(o, "--fast")) fast = 1;
         else if (o[0] == '+') ;                                      // verilator plusargs
@@ -85,6 +92,7 @@ int main(int argc, char **argv)
     Vcpu_sys *d = new Vcpu_sys;
     d->cfg_mode = mode; d->cfg_density = density; d->cfg_bright = bright; d->cfg_reverb = reverb;
     d->cfg_visuals = 0; d->cfg_seed_lock = 1; d->cfg_seed = seed; d->cfg_sleep = sleep_sel;
+    d->fw_we = 0; d->fw_addr = 0; d->fw_data = 0;
     d->cmd_reseed = 0; d->settings_seq = 0; d->rtc_epoch = 0; d->btn_edge = 0; d->frame_tick = 0;
     d->mem_ack = 0; d->mem_rd = 0;
 
@@ -95,6 +103,10 @@ int main(int argc, char **argv)
     uint16_t ack_data = 0;
 
     size_t pi = 0;
+    int si = 0;
+    uint32_t ctrl[CR_NUM_REGS] = {0};
+    ctrl[CR_MODE] = mode; ctrl[CR_DENSITY] = density; ctrl[CR_BRIGHT] = bright; ctrl[CR_REVERB] = reverb;
+    ctrl[CR_SEED_LOCK] = 1; ctrl[CR_SEED] = seed; ctrl[CR_SLEEP] = sleep_sel;
     uint64_t cyc = 0, samples = 0, want = dur_ms * 48;
     double frame_acc = 0.0;
     clock_t t0 = clock();
@@ -106,6 +118,15 @@ int main(int argc, char **argv)
         uint32_t edge = 0;
         while (pi < presses.size() && presses[pi].tick - 1 <= d->tick) edge |= presses[pi++].mask;
         d->btn_edge = edge;
+        d->cmd_reseed = 0;
+        while (si < nset && (sets[si].reg == SET_RESEED ? sets[si].tick - 1 : sets[si].tick) <= d->tick) {
+            const setscript_t *q = &sets[si++];
+            if (q->reg == SET_RESEED) { d->cmd_reseed = 1; continue; }
+            if (ctrl[q->reg] != q->val) { ctrl[q->reg] = q->val; ctrl[CR_SETTINGS_SEQ]++; }
+            d->cfg_mode = ctrl[CR_MODE]; d->cfg_density = ctrl[CR_DENSITY]; d->cfg_bright = ctrl[CR_BRIGHT];
+            d->cfg_reverb = ctrl[CR_REVERB]; d->cfg_visuals = ctrl[CR_VISUALS]; d->cfg_seed_lock = ctrl[CR_SEED_LOCK];
+            d->cfg_seed = ctrl[CR_SEED]; d->cfg_sleep = ctrl[CR_SLEEP]; d->settings_seq = ctrl[CR_SETTINGS_SEQ];
+        }
         if (fast) d->frame_tick = (cyc & 1u) && d->fifo_level > 16;
         else { frame_acc += 1.0; d->frame_tick = 0; if (frame_acc >= 1546.875) { frame_acc -= 1546.875; d->frame_tick = 1; } }
         d->mem_ack = 0;

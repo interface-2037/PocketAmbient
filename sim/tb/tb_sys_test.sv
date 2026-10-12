@@ -1,10 +1,13 @@
 // tb_sys_test.sv - integration test of the Phase 4 hardware test top (sys_test): boot through
 // the pin-level 55 ns SRAM model (engine clears the SRAM), CPU runs composer_init and the
 // first ticks with 48 kHz frame ticks, autostart press of A; checks the screen fields and
-// that the first samples equal the model's (render --mode drift --seed 123).
-//   vvp tb_sys_test.vvp +ref=<render raw> [+ms=N]
+// that the first samples equal the model's (render --mode drift --seed 123, in ref.raw).
+//   vvp tb_sys_test.vvp [+ms=N]
+// Compiled with -P tb_sys_test.SLOT=1 '-Ptb_sys_test.FW="../../sim/out/zero.hex"' the CPU RAM
+// starts empty and the firmware is
+// streamed in over the bridge while reset_n is low, like an APF data slot (big-endian words).
 `timescale 1ns/1ps
-module tb_sys_test;
+module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex");
     reg clk = 0, reset_n = 0;
     always #6.734 clk = ~clk;
     reg  [31:0] keys = 0;
@@ -17,7 +20,15 @@ module tb_sys_test;
     wire [15:0] sram_dq;
     wire        sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n;
 
-    sys_test dut (.clk(clk), .reset_n(reset_n), .cont1_key(keys), .tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
+    reg         bridge_wr = 0, bridge_rd = 0;
+    reg  [31:0] bridge_addr = 0, bridge_wr_data = 0;
+    wire [31:0] settings_rd_data;
+    reg  [31:0] fw [0:16383];
+    initial $readmemh("core/cpu/composer.hex", fw);
+
+    sys_test #(.FW_HEX(FW)) dut (.clk(clk), .reset_n(reset_n),
+        .bridge_wr(bridge_wr), .bridge_rd(bridge_rd), .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
+        .settings_rd_data(settings_rd_data), .rtc_epoch(32'd1760000000), .cont1_key(keys), .tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
         .txt_we(txt_we), .txt_addr(txt_addr), .txt_data(txt_data), .sram_a(sram_a), .sram_dq(sram_dq),
         .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n), .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n));
     async_sram_model u_mem (.a(sram_a), .dq(sram_dq), .oe_n(sram_oe_n), .we_n(sram_we_n),
@@ -48,6 +59,22 @@ module tb_sys_test;
         if ($test$plusargs("ref")) begin end
         bad = 0; n = 0;
         repeat (5) @(posedge clk);
+        if (SLOT) begin                          // data slot load, one bridge write every 4 clocks
+            for (i = 0; i < 16384; i = i + 1) begin
+                @(negedge clk);
+                bridge_addr = 32'h2000_0000 + 4 * i;
+                bridge_wr_data = {fw[i][7:0], fw[i][15:8], fw[i][23:16], fw[i][31:24]};
+                bridge_wr = 1;
+                @(negedge clk) bridge_wr = 0;
+                repeat (2) @(negedge clk);
+            end
+            $display("firmware loaded over the bridge");
+        end
+        // persisted menu values, written by the APF before Reset Exit: Lock seed on, seed 123
+        @(negedge clk) begin bridge_addr = 32'h5000_0014; bridge_wr_data = 1; bridge_wr = 1; end
+        @(negedge clk) bridge_wr = 0;
+        @(negedge clk) begin bridge_addr = 32'h5000_0018; bridge_wr_data = 123; bridge_wr = 1; end
+        @(negedge clk) bridge_wr = 0;
         reset_n = 1;
         wait (dut.u_sys.cpu_rstn);
         $display("engine ready (SRAM cleared) at %0t ns", $time / 1000);
@@ -65,6 +92,11 @@ module tb_sys_test;
             if (dut.u_sys.trap || dut.u_sys.bus_err) begin $display("FAIL: trap %b bus_err %b", dut.u_sys.trap, dut.u_sys.bus_err); $finish; end
         end
         repeat (200) @(posedge clk);
+        // the menu reads the composer's live values
+        @(negedge clk) begin bridge_addr = 32'h5000_0018; bridge_rd = 1; end
+        @(negedge clk) bridge_rd = 0;
+        $display("menu: seed register reads %0d", settings_rd_data);
+        if (settings_rd_data != 123) bad = bad + 1;
         for (r = 4; r <= 13; r = r + 1) begin
             for (i = 0; i < 20; i = i + 1) row[8 * (19 - i) +: 8] = (screen[r * 32 + i] & 8'h3F) + 8'd32;
             $display("screen row %2d: \"%s\"", r, row);

@@ -38,6 +38,11 @@ module cpu_sys #(
     input  wire [31:0] settings_seq,
     input  wire [31:0] rtc_epoch,
     input  wire [15:0] btn_edge,           // pressed-edge pulses (debounced), regs.h BTN_* bits
+    // firmware load (dev builds: APF data slot over the bridge, D50); used only while the CPU
+    // is held in reset, otherwise ignored
+    input  wire        fw_we,
+    input  wire [13:0] fw_addr,            // word address in the 64 KB RAM
+    input  wire [31:0] fw_data,            // little-endian CPU word
     // audio out
     input  wire        frame_tick,         // one pulse per 48 kHz frame
     output reg  [15:0] pcm_l,
@@ -54,6 +59,13 @@ module cpu_sys #(
     output wire [31:0] st_mode,
     output wire [31:0] st_elapsed,
     output wire [31:0] st_seed,
+    output wire [31:0] st_density,
+    output wire [31:0] st_bright,
+    output wire [31:0] st_visuals,
+    output wire [31:0] st_overlay,
+    output wire [31:0] st_reverb,
+    output wire [31:0] st_sleep,
+    output wire        st_valid,           // the composer has published its status (tick > 0)
     // diagnostics
     output reg  [63:0] tick,
     output reg  [31:0] tick_cycles,        // CPU cycles of the last tick (incl. composer_init at 0)
@@ -116,14 +128,17 @@ module cpu_sys #(
     initial $readmemh(FW_HEX, ram);
     wire        sel_ram = mem_addr_c[31:16] == 16'h0000;
     wire        ram_we_ok = mem_valid && !mem_ready && sel_ram;
+    // one port: the firmware loader while the CPU is in reset, else the CPU
+    wire        ld = fw_we && !cpu_rstn;
+    wire [13:0] ram_a = ld ? fw_addr : mem_addr_c[15:2];
+    wire  [3:0] ram_be = ld ? 4'hF : ram_we_ok ? mem_wstrb : 4'h0;
+    wire [31:0] ram_wd = ld ? fw_data : mem_wdata;
     always @(posedge clk) begin
-        if (ram_we_ok) begin
-            if (mem_wstrb[0]) ram[mem_addr_c[15:2]][0] <= mem_wdata[7:0];
-            if (mem_wstrb[1]) ram[mem_addr_c[15:2]][1] <= mem_wdata[15:8];
-            if (mem_wstrb[2]) ram[mem_addr_c[15:2]][2] <= mem_wdata[23:16];
-            if (mem_wstrb[3]) ram[mem_addr_c[15:2]][3] <= mem_wdata[31:24];
-        end
-        ram_q <= ram[mem_addr_c[15:2]];
+        if (ram_be[0]) ram[ram_a][0] <= ram_wd[7:0];
+        if (ram_be[1]) ram[ram_a][1] <= ram_wd[15:8];
+        if (ram_be[2]) ram[ram_a][2] <= ram_wd[23:16];
+        if (ram_be[3]) ram[ram_a][3] <= ram_wd[31:24];
+        ram_q <= ram[ram_a];
     end
 
     // ------------------------------------------------------------- control block
@@ -134,6 +149,13 @@ module cpu_sys #(
     assign st_mode = st_r[17];
     assign st_elapsed = st_r[18];
     assign st_seed = st_r[19];
+    assign st_density = st_r[20];
+    assign st_bright = st_r[21];
+    assign st_visuals = st_r[22];
+    assign st_overlay = st_r[23];
+    assign st_reverb = st_r[24];
+    assign st_sleep = st_r[25];
+    assign st_valid = tick != 64'd0;
 
     function automatic [31:0] ctrl_rd(input [4:0] r);
         case (r)

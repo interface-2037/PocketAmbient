@@ -753,6 +753,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE core/synth/audio_engine.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/synth/sram_ctrl.sv
 set_global_assignment -name VERILOG_FILE core/cpu/picorv32.v
 set_global_assignment -name SYSTEMVERILOG_FILE core/cpu/cpu_sys.sv
+set_global_assignment -name SYSTEMVERILOG_FILE core/settings_bridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/test/sys_test.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/ui/text_layer.sv
 set_global_assignment -name SEARCH_PATH core/test

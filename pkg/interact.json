@@ -1,7 +1,126 @@
 {
     "interact": {
         "magic": "APF_VER_1",
-        "variables": [],
+        "variables": [
+            {
+                "name": "Mode",
+                "id": 1,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000000",
+                "defaultval": 0,
+                "options": [
+                    { "value": 0, "name": "Drift" },
+                    { "value": 1, "name": "Tides" },
+                    { "value": 2, "name": "Hush" },
+                    { "value": 3, "name": "Mother" }
+                ]
+            },
+            {
+                "name": "Density",
+                "id": 2,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000004",
+                "defaultval": 3,
+                "options": [
+                    { "value": 1, "name": "1 Sparse" },
+                    { "value": 2, "name": "2" },
+                    { "value": 3, "name": "3" },
+                    { "value": 4, "name": "4" },
+                    { "value": 5, "name": "5 Busy" }
+                ]
+            },
+            {
+                "name": "Brightness",
+                "id": 3,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000008",
+                "defaultval": 3,
+                "options": [
+                    { "value": 1, "name": "1 Dark" },
+                    { "value": 2, "name": "2" },
+                    { "value": 3, "name": "3" },
+                    { "value": 4, "name": "4" },
+                    { "value": 5, "name": "5 Bright" }
+                ]
+            },
+            {
+                "name": "Reverb",
+                "id": 4,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x5000000C",
+                "defaultval": 1,
+                "options": [
+                    { "value": 0, "name": "Low" },
+                    { "value": 1, "name": "Medium" },
+                    { "value": 2, "name": "High" }
+                ]
+            },
+            {
+                "name": "Visuals",
+                "id": 5,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000010",
+                "defaultval": 0,
+                "options": [
+                    { "value": 0, "name": "Full" },
+                    { "value": 1, "name": "Minimal" },
+                    { "value": 2, "name": "Off" }
+                ]
+            },
+            {
+                "name": "Sleep Timer",
+                "id": 6,
+                "type": "list",
+                "enabled": true,
+                "persist": true,
+                "address": "0x5000001C",
+                "defaultval": 0,
+                "options": [
+                    { "value": 0, "name": "Off" },
+                    { "value": 1, "name": "30 min" },
+                    { "value": 2, "name": "60 min" },
+                    { "value": 3, "name": "90 min" }
+                ]
+            },
+            {
+                "name": "Lock Seed",
+                "id": 7,
+                "type": "check",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000014",
+                "defaultval": 0,
+                "value": 1
+            },
+            {
+                "name": "Seed",
+                "id": 8,
+                "type": "number_u32",
+                "enabled": true,
+                "persist": true,
+                "address": "0x50000018",
+                "defaultval": 0
+            },
+            {
+                "name": "Reseed",
+                "id": 9,
+                "type": "action",
+                "enabled": true,
+                "writeonly": true,
+                "address": "0x50000020",
+                "value": 1
+            }
+        ],
         "messages": []
     }
 }
