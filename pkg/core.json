@@ -4,11 +4,11 @@
         "metadata": {
             "platform_ids": ["ambient"],
             "shortname": "AmbientPocket",
-            "description": "Generative ambient music. Phase 0 build: 440 Hz test tone.",
+            "description": "Generative ambient music: DRIFT, TIDES, HUSH and MOTHER.",
             "author": "beingFar",
             "url": "",
-            "version": "0.4.0",
-            "date_release": "2026-10-10"
+            "version": "0.4.4",
+            "date_release": "2026-10-12"
         },
         "framework": {
             "target_product": "Analogue Pocket",

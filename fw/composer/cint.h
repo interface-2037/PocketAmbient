@@ -184,6 +184,7 @@ struct comp {
     hkey_t   key;
     fxset_t  fx_cur, fx_tgt;
     uint32_t fx_ramp;
+    uint8_t  m_mode;                /* mode whose state c->m holds; MODE_COUNT = none (D53) */
     union { drift_t d; tides_t t; hush_t h; mother_t o; } m;
 };
 

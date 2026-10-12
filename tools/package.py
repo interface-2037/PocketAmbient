@@ -7,6 +7,8 @@
 Both use src/fpga/output_files/ap_core.rbf; the bitstream is the same. A dev build declares the
 firmware data slot (pkg/data_dev.json) and ships Assets/ambient/common/composer.bin, made from
 src/fpga/core/cpu/composer.hex. To try new music on a dev build, replace that one file.
+Both declare the save slot (ambient.sav, D58); the APF creates it on Quit / power-off in
+Saves/ambient/beingFar.AmbientPocket/.
 
 dist/sdcard/
   Cores/beingFar.AmbientPocket/  bitstream.rbf_r, core.json, audio.json, data.json, input.json,

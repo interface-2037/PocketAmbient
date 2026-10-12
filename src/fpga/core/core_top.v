@@ -308,20 +308,25 @@ assign vpll_feed = 1'bZ;
 // for bridge write data, we just broadcast it to all bus devices
 // for bridge read data, we have to mux it
 // add your own devices here
+// The APF takes a read's word after the bridge_rd strobe, when bridge_addr may already have moved
+// on (D57): every device captures its word on the strobe (core_bridge_cmd, settings_bridge), and
+// the mux selects by the region of the last strobe, not by the current address.
+    reg     [7:0]   rd_region;
+always @(posedge clk_74a) if(bridge_rd) rd_region <= bridge_addr[31:24];
 always @(*) begin
-    casex(bridge_addr)
+    casex(rd_region)
     default: begin
         bridge_rd_data <= 0;
     end
-    32'h10xxxxxx: begin
+    8'h10: begin
         // example
         // bridge_rd_data <= example_device_data;
         bridge_rd_data <= 0;
     end
-    32'h50xxxxxx: begin
-        bridge_rd_data <= settings_rd_data;     // core menu (settings_bridge.sv, interact.json)
+    8'h50, 8'h60: begin
+        bridge_rd_data <= settings_rd_data;     // core menu and save slot (settings_bridge.sv)
     end
-    32'hF8xxxxxx: begin
+    8'hF8: begin
         bridge_rd_data <= cmd_bridge_rd_data;
     end
     endcase
@@ -408,6 +413,16 @@ end
     wire            datatable_wren;
     wire    [31:0]  datatable_data;
     wire    [31:0]  datatable_q;
+
+// save slot (id 1, ambient.sav): its size goes into the data table so the APF writes the file (D58)
+slot_size #(.ID(32'd1), .SIZE(32'h20)) u_slot_size (
+    .clk        ( clk_74a ),
+    .start      ( {dataslot_allcomplete, reset_n} ),
+    .dt_addr    ( datatable_addr ),
+    .dt_wren    ( datatable_wren ),
+    .dt_data    ( datatable_data ),
+    .dt_q       ( datatable_q )
+);
 
 core_bridge_cmd icb (
 

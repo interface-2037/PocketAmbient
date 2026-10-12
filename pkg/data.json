@@ -1,6 +1,18 @@
 {
     "data": {
         "magic": "APF_VER_1",
-        "data_slots": []
+        "data_slots": [
+            {
+                "name": "Saved settings",
+                "id": 1,
+                "required": false,
+                "nonvolatile": true,
+                "parameters": "0x22",
+                "extensions": ["sav"],
+                "filename": "ambient.sav",
+                "address": "0x60000000",
+                "size_maximum": "0x20"
+            }
+        ]
     }
 }

@@ -141,6 +141,19 @@ static void boxed(int x, int y, const char *label, const char *value)
     fb_text(x + 3, y + 12, value, TXT, 1, 1);
 }
 
+/* The mode's own state (c->m, a union) is shown only while that mode is running: on the
+ * title screen, or after a mode change during a fade-out, it is stale or belongs to another
+ * mode (D53). Readouts then show "--" and the drawings use a zeroed state. */
+static int live(const comp_t *c)
+{
+    return c->state != CS_TITLE && c->m_mode == c->mode;
+}
+
+static const drift_t  D_IDLE;
+static const tides_t  T_IDLE;
+static const hush_t   H_IDLE;
+static const mother_t O_IDLE;
+
 static uint32_t elapsed_s(const comp_t *c)
 {
     return c->state == CS_TITLE ? 0u : (uint32_t)((c->now - c->play_start) / 1000u);
@@ -189,10 +202,11 @@ static void press_a(const comp_t *c, int y, unsigned col)
 /* ------------------------------------------------------------------ DRIFT */
 static void drift(const comp_t *c, int full)
 {
-    const drift_t *d = &c->m.d;
+    const int on = live(c);
+    const drift_t *d = on ? &c->m.d : &D_IDLE;
     char x[16], b[48], *p;
     put_frac2(x, d->tension);
-    base(c, "DRIFT", "TENSION", x, full, 244);
+    base(c, "DRIFT", "TENSION", on ? x : "--", full, 244);
     if (full) {
         int cx = 115, cy = 158, r = 84;
         int rot = (int)(c->now / 400u) & 15;                      /* slow turn: 20/256 turn per 6.4 s */
@@ -226,7 +240,7 @@ static void drift(const comp_t *c, int full)
         }
     }
     p = put_s(b, "STRINGS ");
-    p = put_u(p, d->nstr, 1);
+    p = on ? put_u(p, d->nstr, 1) : put_s(p, "-");
     p = put_s(p, "  HORN ");
     p = put_note(p, d->horn_left > 0 ? d->horn_p : 0);
     p = put_s(p, "  DRONE ");
@@ -238,10 +252,11 @@ static void drift(const comp_t *c, int full)
 /* ------------------------------------------------------------------ TIDES */
 static void tides(const comp_t *c, int full)
 {
-    const tides_t *t = &c->m.t;
+    const int on = live(c);
+    const tides_t *t = on ? &c->m.t : &T_IDLE;
     char x[16], b[24], *p;
-    put_chord(x, t->key, CHORD_VOCAB[t->chord % CHORD_VOCAB_N], 1);
-    base(c, "TIDES", "CHORD", c->state == CS_TITLE ? "--" : x, 0, 0);
+    put_chord(x, t->key, CHORD_VOCAB[(unsigned)t->chord % CHORD_VOCAB_N], 1);
+    base(c, "TIDES", "CHORD", on ? x : "--", 0, 0);
     int cx = 110, cy = 160;
     if (full) {
         for (int gx = 14; gx < 222; gx += 12) fb_vline(gx, 40, 280, LINE);
@@ -280,7 +295,8 @@ static void tides(const comp_t *c, int full)
 /* ------------------------------------------------------------------ HUSH */
 static void hush(const comp_t *c, int full, int brk)
 {
-    const hush_t *h = &c->m.h;
+    const int on = live(c);
+    const hush_t *h = on ? &c->m.h : &H_IDLE;
     char b[48], *p;
     fb_text(16, 14, "HUSH", TXT, 3, 1);
     fb_text(196, 22, "LOFI CTR", TXT, 1, 2);
@@ -306,23 +322,23 @@ static void hush(const comp_t *c, int full, int brk)
             if (i) p = put_s(p, " | ");
             p = put_chord(p, h->key, ch, 0);
         }
-        if (c->state != CS_TITLE) fb_text(115 - fb_text_w(b, 1, 1) / 2 + 45, 101, b, HI, 1, 1);
+        if (on) fb_text(115 - fb_text_w(b, 1, 1) / 2 + 45, 101, b, HI, 1, 1);
     }
     fb_dotted_h(14, 306, 172, TXT, 4, 2);
     uint32_t beat = 0;
-    if (c->state != CS_TITLE && h->bpm && c->now > h->t0)
+    if (on && h->bpm && c->now > h->t0)
         beat = (uint32_t)((c->now - h->t0) * h->bpm / 60000u) & 3u;
     for (int i = 0; i < 4; i++) {
         int x = 40 + i * 64;
-        if (c->state != CS_TITLE && (uint32_t)i == beat) fb_fill(x, 186, x + 40, 198, TXT);
+        if (on && (uint32_t)i == beat) fb_fill(x, 186, x + 40, 198, TXT);
         else fb_rect(x, 186, x + 40, 198, TXT);
     }
-    put_u(b, h->bpm, 3);
+    if (on) put_u(b, h->bpm, 3); else put_s(b, "---");
     fb_text(16, 222, b, TXT, 4, 1);
     fb_text(120, 236, "BPM", TXT, 2, 1);
     put_u(put_s(b, "DR "), c->density, 1);
     fb_text(200, 222, b, TXT, 3, 1);
-    put_u(put_s(b, "BAR "), h->bar, 1);
+    if (on) put_u(put_s(b, "BAR "), h->bar, 1); else put_s(b, "BAR --");
     fb_text(16, 268, b, HI, 1, 1);
     press_a(c, 100, HI);
 }
@@ -330,10 +346,11 @@ static void hush(const comp_t *c, int full, int brk)
 /* ------------------------------------------------------------------ MOTHER */
 static void mother(const comp_t *c, int full)
 {
-    const mother_t *o = &c->m.o;
+    const int on = live(c);
+    const mother_t *o = on ? &c->m.o : &O_IDLE;
     char x[16], b[40], *p;
     put_frac2(x, o->activity);
-    base(c, "MOTHER", "ACTIVITY", x, full, 0);
+    base(c, "MOTHER", "ACTIVITY", on ? x : "--", full, 0);
     if (full) { cross(30, 258, LINE); cross(200, 258, LINE); }
     int y = 46;
     fb_text(14, y, c->state == CS_TITLE ? "INTERFACE READY" : "INTERFACE ACTIVE", HI, 1, 1);
@@ -346,10 +363,14 @@ static void mother(const comp_t *c, int full)
     fb_text(14, y, "  DRIVE 2", TXT, 1, 1);
     static const char *DP[4] = {"IDLE", "SPIN UP", "SEEK", "SPIN DN"};
     fb_text(14 + 17 * 7, y, DP[o->drive_phase & 3u], TXT, 1, 1); y += 24;
-    p = put_s(b, "THERMAL  -");
-    p = put_u(p, 12u + (uint32_t)(o->activity >> 13), 2);
-    p = put_s(p, ".");
-    put_u(p, (uint32_t)(o->activity >> 9) % 10u, 1);
+    p = put_s(b, on ? "THERMAL  -" : "THERMAL  ");
+    if (on) {
+        p = put_u(p, 12u + (uint32_t)(o->activity >> 13), 2);
+        p = put_s(p, ".");
+        put_u(p, (uint32_t)(o->activity >> 9) % 10u, 1);
+    } else {
+        put_s(p, "--.-");
+    }
     fb_text(14, y, b, TXT, 1, 1); y += 12;
     fb_text(14, y, o->alert ? "HULL     CONTACT" : "HULL     STABLE", o->alert ? HI : TXT, 1, 1); y += 24;
     const char *q = o->alert ? "TRACKING" : "AWAITING INQUIRY";
@@ -415,7 +436,7 @@ void ui_frame(void)
     }
     started = 1;
     last_frame = c->now;
-    int brk = c->mode == MODE_HUSH && c->m.h.section == S_BREAK && c->state != CS_TITLE;
+    int brk = c->mode == MODE_HUSH && live(c) && c->m.h.section == S_BREAK;
     if (c->visuals == 2) {
         fb_palette(PAL_OFF);
         fb_clear(BG);

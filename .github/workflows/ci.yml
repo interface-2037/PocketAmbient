@@ -54,9 +54,9 @@ jobs:
           iverilog -g2012 -o tb_fb_video.vvp sim/tb/tb_fb_video.sv src/fpga/core/ui/fb_video.sv
           vvp -n tb_fb_video.vvp | tee tb_fb_video.log
           grep -q "^PASS" tb_fb_video.log
-      - name: Settings bridge unit test
+      - name: Settings bridge + save slot unit test
         run: |
-          iverilog -g2012 -o tb_settings.vvp sim/tb/tb_settings.sv src/fpga/core/settings_bridge.sv
+          iverilog -g2012 -o tb_settings.vvp sim/tb/tb_settings.sv src/fpga/core/settings_bridge.sv src/fpga/core/slot_size.sv
           vvp -n tb_settings.vvp | tee tb_settings.log
           grep -q "^PASS" tb_settings.log
       - name: Full system (CPU + firmware + engine) == host render, 2 s per mode, with menu changes

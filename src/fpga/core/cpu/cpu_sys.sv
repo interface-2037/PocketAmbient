@@ -73,7 +73,7 @@ module cpu_sys #(
     output wire [31:0] st_overlay,
     output wire [31:0] st_reverb,
     output wire [31:0] st_sleep,
-    output wire        st_valid,           // the composer has published its status (tick > 0)
+    output reg         st_valid = 1'b0,    // the composer has published its status (tick > 0)
     // diagnostics
     output reg  [63:0] tick,
     output reg  [31:0] tick_cycles,        // CPU cycles of the last tick (incl. composer_init at 0)
@@ -181,7 +181,8 @@ module cpu_sys #(
     assign st_overlay = st_r[23];
     assign st_reverb = st_r[24];
     assign st_sleep = st_r[25];
-    assign st_valid = tick != 64'd0;
+    // st_valid == (tick != 0), kept as a flag: the 64-bit compare fed the menu's write logic
+    // (settings_bridge) in the same cycle and was the slowest CPU-side path in v0.4.0
 
     function automatic [31:0] ctrl_rd(input [4:0] r);
         case (r)
@@ -229,7 +230,7 @@ module cpu_sys #(
         ewr_en <= 1'b0;
         eng_start <= 1'b0;
         if (rst) begin
-            q <= Q_CPU; tick <= 64'd0; cyc <= 32'd0; tick_cycles <= 32'd0; tick_cycles_max <= 32'd0;
+            q <= Q_CPU; tick <= 64'd0; st_valid <= 1'b0; cyc <= 32'd0; tick_cycles <= 32'd0; tick_cycles_max <= 32'd0;
             btn_pend <= 16'd0; btn_evt <= 16'd0; cmd_pend <= 1'b0; cmd_evt <= 1'b0;
             bwait <= 2'd0; bus_err <= 1'b0; fb_wait <= 1'b0;
         end else begin
@@ -301,6 +302,7 @@ module cpu_sys #(
                     if (n_left == 6'd1) begin
                         q <= Q_CPU; cyc <= 32'd0;
                         tick <= tick + 64'd1;
+                        st_valid <= 1'b1;
                         btn_evt <= btn_evt | btn_pend | btn_edge; btn_pend <= 16'd0;
                         cmd_evt <= cmd_evt | cmd_pend | cmd_reseed; cmd_pend <= 1'b0;
                     end else begin

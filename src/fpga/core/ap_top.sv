@@ -1,7 +1,8 @@
 // ap_top.sv - the Ambient Pocket core below core_top (v0.4.x), all in clk_74a except video:
 // the composer firmware on the PicoRV32 drives the audio engine (cpu_sys) and draws the
 // screens into fb_video; the Pocket's buttons go to the composer, the core menu to
-// settings_bridge (pkg/interact.json), and dev builds load the firmware from the SD card.
+// settings_bridge (pkg/interact.json, and the save slot ambient.sav), and dev builds load the
+// firmware from the SD card.
 // Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
 // `fault` (CPU trap or bus error) makes core_top show a red screen.
 `default_nettype none
@@ -16,7 +17,7 @@ module ap_top #(
     input  wire        bridge_rd,
     input  wire [31:0] bridge_addr,
     input  wire [31:0] bridge_wr_data,
-    output wire [31:0] settings_rd_data,   // bridge reads of 0x5000_00xx (menu)
+    output wire [31:0] settings_rd_data,   // bridge reads of 0x5000_00xx (menu), 0x6000_00xx (save)
     input  wire [31:0] rtc_epoch,
     input  wire [31:0] cont1_key,
     input  wire        tick,               // 48 kHz frame tick (start of a stereo frame)
@@ -76,7 +77,7 @@ module ap_top #(
     wire  [1:0] cfg_reverb, cfg_visuals, cfg_sleep;
     wire        cfg_seed_lock, cmd_reseed;
     wire [31:0] cfg_seed, settings_seq;
-    settings_bridge u_set (.clk(clk), .bridge_wr(bridge_wr), .bridge_rd(bridge_rd),
+    settings_bridge u_set (.clk(clk), .rst(rst), .bridge_wr(bridge_wr), .bridge_rd(bridge_rd),
         .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data), .bridge_rd_data(settings_rd_data),
         .st_valid(st_valid), .st_mode(st_mode[2:0]), .st_density(st_density[2:0]), .st_bright(st_bright[2:0]),
         .st_reverb(st_reverb[1:0]), .st_visuals(st_visuals[1:0]), .st_sleep(st_sleep[1:0]), .st_seed(st_seed),
