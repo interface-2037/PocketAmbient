@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Mutation check: each deliberate one-token RTL change must make the fuzz vectors FAIL.
 #   sim/mutate.sh [fuzz_samples]   (default 200000)
+#   SIM=verilator sim/mutate.sh ... same, compiled with Verilator (much faster; see run_fuzz.sh)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/c/iverilog/bin:$PATH"
@@ -29,8 +30,16 @@ for m in "${muts[@]}"; do
   i=$((i + 1))
   sed "$m" $SRC > $T/ve_$i.sv
   if cmp -s $SRC $T/ve_$i.sv; then echo "DID NOT APPLY" > $T/r$i.txt; continue; fi
-  ( iverilog -g2012 -s tb_voice_engine -o $T/m$i.vvp sim/tb/tb_voice_engine.sv $T/ve_$i.sv
-    cd src/fpga && vvp -n ../../$T/m$i.vvp +writes=../../sim/vectors/mut_writes.txt \
+  if [ "${SIM:-icarus}" = verilator ]; then
+    verilator --binary --timing -O3 --x-assign fast --x-initial fast -Wno-fatal -Wno-lint -Wno-style \
+      -Wno-TIMESCALEMOD --top-module tb_voice_engine --Mdir $T/obj$i -CFLAGS "-O2" \
+      sim/tb/tb_voice_engine.sv $T/ve_$i.sv > $T/build$i.log 2>&1
+    RUN=(../../$T/obj$i/Vtb_voice_engine)
+  else
+    iverilog -g2012 -s tb_voice_engine -o $T/m$i.vvp sim/tb/tb_voice_engine.sv $T/ve_$i.sv
+    RUN=(vvp -n ../../$T/m$i.vvp)
+  fi
+  ( cd src/fpga && "${RUN[@]}" +writes=../../sim/vectors/mut_writes.txt \
       +bus=../../sim/vectors/mut_bus.txt | grep -E "^(PASS|FAIL)" > ../../$T/r$i.txt ) &
 done
 wait

@@ -2,12 +2,16 @@
 // Bit-exact with echo_process(), reverb_process() and the master section of
 // sm_process() in model/synth_model.c.
 //
-// A sequential step machine with one registered 33x33 multiplier (result two
-// steps after issue) and one external-SRAM port (request / acknowledge; the
+// A sequential step machine with one pipelined 33x33 multiplier (ve_mul from
+// voice_engine.sv: registered partial products, then a registered sum, so the product is
+// usable three cycles after issue) and one external-SRAM port (request / acknowledge; the
 // machine waits for every access, so reads and writes happen in program order).
 // Delay lines sit in the SRAM exactly as sm_init() lays them out (docs/MEMORY_BUDGET.md).
 // After reset the SRAM is cleared (the model starts from zeroed memory) and `ready` rises.
-// ~50 multiplies + 34 SRAM accesses per sample: ~300 cycles with 3-cycle SRAM access.
+// ~50 multiplies + 34 SRAM accesses per sample; the 3-cycle product adds ~50 cycles per sample
+// over v0.4.0 (voice + FX worst case in the music benches 577 cycles, v0.4.0 527).
+// Timing rule (v0.4.1): a step may use the product `p` only in plain arithmetic into a
+// register; an SRAM address is never computed from `p` in the same step (E2 -> E2R).
 `default_nettype none
 
 module fx_engine (
@@ -149,10 +153,12 @@ module fx_engine (
         lp_l = 0; lp_r = 0; mg = 0;
     end
 
-    // multiplier
+    // multiplier: issue at step k, partial products at k+1, product register at k+2, used at k+3
+    // (the machine waits through `mw`). A single-stage ma * mb left the partial-product adder
+    // in front of every step that used p (worst setup slack +0.21 ns in v0.4.0).
     reg signed [32:0] ma, mb;
-    reg signed [65:0] p;
-    always @(posedge clk) p <= ma * mb;
+    wire signed [65:0] p;
+    ve_mul u_mul (.clk(clk), .a(ma), .b(mb), .p(p));
 
     // ------------------------------------------------------------- steps
     localparam [5:0] IDLE = 6'd0, CLR = 6'd1,
@@ -166,10 +172,12 @@ module fx_engine (
                      G1 = 6'd40, P0 = 6'd41, P1 = 6'd42, P2 = 6'd43, P3 = 6'd44, P4 = 6'd45, P5 = 6'd46,
                      P6 = 6'd47, P7 = 6'd48, P8 = 6'd49, FIN = 6'd50,
                      E1B = 6'd51, E1X = 6'd52, W0B = 6'd53, X7 = 6'd54, P3B = 6'd55,
-                     E11S = 6'd56, E12S = 6'd57, R1S = 6'd58, A2S = 6'd59, A3S = 6'd60, X3S = 6'd61, X6S = 6'd62;
+                     E11S = 6'd56, E12S = 6'd57, R1S = 6'd58, A2S = 6'd59, A3S = 6'd60, X3S = 6'd61, X6S = 6'd62,
+                     E2R = 6'd63;
 
     reg  [5:0] pc;
-    reg        mw, mpend;
+    reg  [1:0] mw;                              // cycles until the product is valid
+    reg        mpend;
     reg [15:0] mrd;
     wire signed [31:0] mrd23 = {{8{mrd[15]}}, mrd, 8'd0};
     reg [16:0] clr_a;
@@ -205,7 +213,7 @@ module fx_engine (
 
     // issue helpers (non-blocking side effects)
     task automatic mul(input signed [32:0] a, input signed [32:0] b);
-        begin ma <= a; mb <= b; mw <= 1'b1; end
+        begin ma <= a; mb <= b; mw <= 2'd2; end
     endtask
     task automatic rd(input [3:0] ln, input [31:0] d);       // sample written d samples ago
         reg [17:0] idx;
@@ -229,9 +237,9 @@ module fx_engine (
         mem_req <= 1'b0;
         sin_ctx <= {wob_ph[31], sp[7:0]};
         if (mem_ack) begin mpend <= 1'b0; mrd <= mem_rd; end
-        if (mw) mw <= 1'b0;
+        if (mw != 2'd0) mw <= mw - 2'd1;
         if (rst) begin
-            pc <= CLR; clr_a <= 17'd0; clr_end <= 1'b0; ready <= 1'b0; mw <= 1'b0; mpend <= 1'b0;
+            pc <= CLR; clr_a <= 17'd0; clr_end <= 1'b0; ready <= 1'b0; mw <= 2'd0; mpend <= 1'b0;
             for (n = 0; n < 15; n = n + 1) pos[n] <= 17'd0;
             for (n = 0; n < 8; n = n + 1) dmp[n] <= 32'sd0;
             for (n = 0; n < 4; n = n + 1) hp[n] <= 64'sd0;
@@ -243,7 +251,7 @@ module fx_engine (
                 bl <= in_l; br <= in_r; brev <= in_rev; becho <= in_echo;
                 pc <= E0;
             end
-        end else if (!mw && !mpend) begin
+        end else if (mw == 2'd0 && !mpend) begin
             case (pc)
             // ------------------------------------------------ clear the SRAM
             CLR: begin
@@ -286,9 +294,9 @@ module fx_engine (
                 ofs = lo32(p >>> 23) + {16'd0, depth};
                 di <= ofs[16:8];
                 fr <= ofs[7:0];
-                rd(LN_ECHO_L, dl + ofs[16:8]);
-                pc <= E3;
+                pc <= E2R;
             end
+            E2R: begin rd(LN_ECHO_L, dl + di); pc <= E3; end    // address from registers only
             E3: begin ea <= mrd23; rd(LN_ECHO_L, dl + di + 1); pc <= E4; end
             E4: begin mul(sx(mrd23 - ea), ux({24'd0, fr})); pc <= E5; end
             E5: begin rle <= ea + lo32(p >>> 8); rd(LN_ECHO_R, dr + di); pc <= E6; end
