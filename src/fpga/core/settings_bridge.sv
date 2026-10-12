@@ -7,7 +7,7 @@
 //   0x20 Reseed (action, write-only)
 //
 //   0x6000_0000, the save slot (8 words = the 32-byte file, word 0 = file bytes 0..3, MSB first):
-//   0 magic "AMBS"   1 {format 1, 23'd0, lock}   2 seed   3 settings (see sav_img)   4-6 0
+//   0 magic "AMBS"   1 {format 1, 23'd0, lock}   2 seed   3 settings (see img3)   4-6 0
 //   7 check word (sav_check)
 //
 // Reads (D57). The APF latches a read on the bridge_rd strobe and takes the word later, after
@@ -32,6 +32,14 @@
 // Reset Exit a valid file (magic + check word) restores Lock seed and the seed. On Quit the APF
 // reads the slot back in reset: until the composer has run once (booted) it gets the loaded words
 // back unchanged, afterwards the image of the current settings.
+//
+// Settings precedence (D59). The APF's interact_persist.json only follows menu changes, so after
+// a button change it restores a stale value. ambient.sav is read from the live settings at every
+// Quit / power-off, so at a cold start (the composer has not run since configuration, !booted)
+// a valid file whose settings word is in range overrides the values the menu file wrote before
+// Reset Exit: mode, density, brightness, reverb, visuals and sleep go into cfg_* and live_*, so
+// the composer starts with them and the menu reads them back. Once the composer has run, live_*
+// is the truth and the file is never applied over it.
 `default_nettype none
 
 module settings_bridge (
@@ -124,6 +132,8 @@ module settings_bridge (
     initial for (i = 0; i < 8; i = i + 1) sav_w[i] = 32'd0;
     reg         sav_new = 1'b0;                 // loaded since the last Reset Exit
     reg         sav_ok = 1'b0;                  // sav_w holds a valid file
+    reg         sav_set_ok = 1'b0;              // its settings word is in range (D59)
+    wire [31:0] s3 = sav_w[3];
     reg  [31:0] img [0:7];                      // the file for the current settings
     initial for (i = 0; i < 8; i = i + 1) img[i] = 32'd0;
     wire [31:0] img_seed = (cfg_seed_lock || !booted) ? cfg_seed : live_seed;
@@ -139,6 +149,10 @@ module settings_bridge (
         img[7] <= sav_check({32'd0, 32'd0, 32'd0, img3, img_seed, {SAV_FORMAT, 23'd0, cfg_seed_lock}, SAV_MAGIC});
         sav_ok <= sav_w[0] == SAV_MAGIC && sav_w[1][31:24] == SAV_FORMAT &&
                   sav_w[7] == sav_check({sav_w[6], sav_w[5], sav_w[4], sav_w[3], sav_w[2], sav_w[1], sav_w[0]});
+        // mode 0-3, density / brightness 1-5, reverb / visuals 0-2, sleep 0-3, other bits 0
+        sav_set_ok <= s3[31:22] == 10'd0 && s3[19:18] == 2'd0 && s3[15:14] == 2'd0 && !s3[11] && !s3[7] &&
+                      s3[3:2] == 2'd0 && s3[6:4] >= 3'd1 && s3[6:4] <= 3'd5 && s3[10:8] >= 3'd1 &&
+                      s3[10:8] <= 3'd5 && s3[13:12] != 2'd3 && s3[17:16] != 2'd3;
     end
 
     always @(posedge clk) begin
@@ -176,13 +190,20 @@ module settings_bridge (
             endcase
         end
         // Reset Exit: a save file loaded for this start restores Lock seed and the seed (it is
-        // the only copy of the seed). Without one, a Lock seed restored from the menu file has
-        // no seed to lock (the APF does not persist Seed), so it is turned off: RTC seed.
+        // the only copy of the seed) and, at a cold start, the settings (D59: newer than the
+        // menu file's). Without one, a Lock seed restored from the menu file has no seed to lock
+        // (the APF does not persist Seed), so it is turned off: RTC seed.
         if (rst_d && !rst) begin
             sav_new <= 1'b0;
             if (sav_new && sav_ok) begin
                 cfg_seed_lock <= sav_w[1][0];
                 if (sav_w[1][0]) cfg_seed <= sav_w[2];
+                if (!booted && sav_set_ok) begin
+                    cfg_mode <= s3[2:0]; cfg_density <= s3[6:4]; cfg_bright <= s3[10:8];
+                    cfg_reverb <= s3[13:12]; cfg_visuals <= s3[17:16]; cfg_sleep <= s3[21:20];
+                    live_mode <= s3[2:0]; live_density <= s3[6:4]; live_bright <= s3[10:8];
+                    live_reverb <= s3[13:12]; live_visuals <= s3[17:16]; live_sleep <= s3[21:20];
+                end
             end else if (!booted && cfg_seed_lock && cfg_seed == 32'd0) cfg_seed_lock <= 1'b0;
         end
     end

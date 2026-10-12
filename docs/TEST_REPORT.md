@@ -1,5 +1,57 @@
 # Test report
 
+## v0.4.4: settings from ambient.sav at a cold start (simulation, 2026-10-12)
+
+**A. v0.4.3 on hardware (user, 2026-10-12)**
+
+| Step (v0.4.3 `HW_TEST_NEXT.md`) | Result |
+|---|---|
+| 1. Power-cycle, version 0.4.3 | **pass** |
+| 2.1–2.3 Mode change / change + A / B during the stop fade-out (D56) | **pass**: no boost, smooth crossfade, B in the fade OK |
+| 2.4 Y overlay | **pass**: CPU MAX 230,942, FIFO MIN 512, UNDERRUN 0, FRAME 1546–1547 |
+| 2.5 Listening check | **pass** |
+| 2.6 Core menu Mode / Density | **pass** |
+| 3. Settings saved at power-off | **FAIL**. Changes made in the menu persist, but a change made with the buttons does not. Menu Density 5, then Down (Density 4 on screen), power off / on: Density came back as **5** |
+| 4. Lock Seed on / off across power cycles | **pass**: seed nonzero, kept when locked, changes when unlocked |
+| 5. Files on the SD card | both written at the same power-off, 11:57 PDT (see below) |
+
+Files after the session (both from the last power-off, 11:57):
+- `Settings/beingFar.AmbientPocket/Interact/_core/interact_persist.json`: id1 Mode 1, id2 Density 3,
+  id3 Brightness 1, id4 Reverb 2, id5 Visuals 0, id6 Sleep 0, id7 Lock 0.
+- `Saves/ambient/beingFar.AmbientPocket/ambient.sav`, 32 bytes, valid: `414D4253 01000000 A5B20AD1
+  00002241 00000000 00000000 00000000 CBD1BC75`. Word 3: TIDES, density 4, brightness 2, reverb High,
+  visuals Full, sleep Off. Word 1 was reported as `00000001`, but the check word `CBD1BC75` matches only
+  `01000000` (format 1, lock off, as the menu file's Lock 0 says). `00000001` gives `CDD1BC73`.
+
+The `.sav` holds the live settings, so the core's power-off reads (D57) and the save slot (D58)
+work. The menu file stores a list's 0-based option **index** in `val`. Its Density 3 / Brightness 1
+are options "4" / "2" (Mode and Reverb options start at 0, so index = value), so at 11:57 the two
+files agree. They don't show what the APF held at the step-3 power-off. Either way, a button change
+did not come back through the menu file, and the core can't control what the APF restores from it.
+Fix: D59.
+
+**B. v0.4.4 checks**
+
+RTL (`settings_bridge.sv`) and test benches only. No firmware, model or engine change.
+
+| Check | Result |
+|---|---|
+| `tb_settings`, new `tb_settings_cold`: five power-ups, each with fresh registers. **Session 0:** no save file, so the menu file is used (DRIFT / 3 / 3 / Med). Menu Density 5, then Down (4), L (brightness 2) and Right (TIDES) with the buttons, and Reverb High from the menu. Quit: the menu reads density 4, and the save image = TIDES / 4 / 2 / High with a valid check word. **Next power-on**, two orders (menu file then slot; slot then menu file). The APF's stale cache (DRIFT / 5 / 3 / High) and session 0's file are written in reset. Before Reset Exit cfg = the menu file's values. After it, cfg, live and APF-style menu reads of all six settings = the file's (TIDES / 4 / 2 / High / Full / Off), and the composer starts with them. Then a menu Density 2 change applies, and a second Reset Exit without a load does not re-apply. A new load of the older file after the composer has run is not applied either. The Quit image carries density 2. **Rejected files**, each with a valid check word: density 0 / 6, brightness 0 / 7, mode 4, reverb 3, visuals 3, a reserved bit, mode bit 3. Each keeps the menu file's values (HUSH / 5 / 1 / Low / Minimal / sleep 2), and the seed is still restored. No file, a bad check word, a foreign magic and format 2 also keep the menu file's values. A valid file with every field at its limit (MOTHER / 1 / 5 / Med / Off / sleep 3) is applied. A menu change, then an unbooted Reset Exit with no load, keeps the change. **The hardware file** above, with a stale menu file (TIDES / 5 / 3 / High), gives density 4 / brightness 2 and lock off. The existing v0.4.3 checks are unchanged | **PASS** |
+| Negative test: the same bench on the v0.4.3 `settings_bridge.sv` | **FAIL, 40 checks**: every cold-start case returns the menu file's values (e.g. "v0.4.3 hardware file: density 4, brightness 2"), and the composer starts with the stale density |
+| Mutations of the new RTL: (a) no `!booted` guard; (b) no range check; (c) `cfg_*` set but not `live_*`; (d) no density upper bound; (e) `sav_new` never cleared | (a) **6 failures** (an older file re-applied over a same-session menu change); (b) **63**; (c) **13** (menu reads disagree with the music); (d) **7**; (e) **3** (re-applied without a new load) |
+| `tb_ap_top` `RESTORE=1` (Icarus, pin-level SRAM, CPU + firmware + engine), now with a stale menu file (DRIFT, density 5, brightness 3, reverb High, Lock seed on) and a save file (TIDES / 4 / 2 / High, lock on, seed 4242), both written over the bridge in reset. APF-style menu reads right after Reset Exit. First samples vs `render --mode tides --seed 4242 --density 4 --brightness 2 --reverb 2`. Then Down (density 3), reset entry, Quit reads | **PASS**: the menu reads TIDES / 4 / 2 / High after Reset Exit, and 480 samples are bit-exact. The Quit reads return TIDES / 3 / 2 / High / lock / 4242, and the save file `414D4253 01000001 00001092 00002231 0 0 0 6299A5F1`. CPU max 230,849 cycles/tick, frame gap 1546..1547 |
+| Same `RESTORE=1` bench on the v0.4.3 `settings_bridge.sv` | **FAIL**: the menu reads DRIFT / 5 / 3 after Reset Exit, the audio differs from sample 467 (10 mismatches in 480), and the Quit reads return DRIFT / 4 / 3 |
+| `tb_ap_top` default (Lock seed + Seed 123 from the menu, no save file) | **PASS**: 480 samples bit-exact, menu seed read 123, CPU max 230,675 cycles/tick |
+| `verilator --lint-only -Wall settings_bridge.sv` | the same single warning as v0.4.3 (`bridge_addr[1:0]` unused) |
+| Firmware on the ISS == host render (`tools/check_fw.sh 60`) | **bit-identical**, all modes |
+| Full system, Verilator (`sim/run_sys.sh`), CI script (2 s, menu mode / reseed / density) | **bit-identical**, all modes; CPU max 230,625–230,675 cycles/tick; 0 underruns |
+| Full system, Verilator, 21 s per mode, presses `6:A,6.5:RIGHT,9.5:A,13:A,13.4:LEFT,13.8:A,17:A,17.5:B,18:RIGHT` + menu `19:DENSITY=2,19.5:REVERB=0` | **bit-identical**, all modes (1,008,000 samples each); CPU max 230,625–230,675 cycles/tick; 0 underruns |
+| Music unchanged vs v0.4.3 | no file under `model/`, `fw/` or `tests/` changed, so the host render and the firmware are the same. The only RTL change acts at Reset Exit, before the composer runs, and only with a valid save file. Without one (every music path above) the settings are bit-for-bit those of v0.4.3 |
+| `make fw` | `composer.hex` regenerated byte-identical (48,934 of 65,536 bytes): no firmware change, not recommitted |
+
+Not testable here: whether the APF writes any menu value *after* Reset Exit at power-on. Such a
+write would count as a menu change and override the file. Hardware checklist step 2.
+
 ## v0.4.3: settings persistence and the saved seed (simulation, 2026-10-12)
 
 Fixes for the v0.4.1 hardware report. The APF's `interact_persist.json` had every list element 0

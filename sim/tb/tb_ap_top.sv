@@ -6,12 +6,13 @@
 // Compiled with -P tb_ap_top.SLOT=1 '-Ptb_ap_top.FW="../../sim/out/zero.hex"' the CPU RAM
 // starts empty and the firmware is
 // streamed in over the bridge while reset_n is low, like an APF data slot (big-endian words).
-// With -P tb_ap_top.RESTORE=1 the boot-restore path (D57, D58) is tested instead: the APF's menu
-// file (TIDES, density 5, brightness 2, reverb High, Lock seed on; no Seed) and the save slot
-// (lock on, seed 4242) are written before Reset Exit, the first samples must equal
-// render --mode tides --seed 4242 --density 5 --brightness 2 --reverb 2, then Down lowers the
-// density to 4 and, after reset entry, APF-style reads (word taken after the address has moved
-// on) of the menu and the save slot must return the current settings.
+// With -P tb_ap_top.RESTORE=1 the boot-restore path (D57, D58, D59) is tested instead: the APF's
+// menu file from its stale cache (DRIFT, density 5, brightness 3, reverb High, Lock seed on; no
+// Seed) and the save slot (TIDES, density 4, brightness 2, reverb High, lock on, seed 4242) are
+// written before Reset Exit. The save file's settings win: the menu must read them back and the
+// first samples must equal render --mode tides --seed 4242 --density 4 --brightness 2 --reverb 2.
+// Then Down lowers the density to 3 and, after reset entry, APF-style reads (word taken after
+// the address has moved on) of the menu and the save slot must return the current settings.
 `timescale 1ns/1ps
 module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "core/cpu/composer.hex");
     reg clk = 0, reset_n = 0, vclk = 0;
@@ -93,10 +94,10 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
             $display("firmware loaded over the bridge");
         end
         if (RESTORE) begin
-            // the APF's menu file (no Seed in it) and the save slot, before Reset Exit
-            bwr(32'h5000_0000, 1); bwr(32'h5000_0004, 5); bwr(32'h5000_0008, 2); bwr(32'h5000_000C, 2);
+            // the APF's menu file (stale; no Seed in it) and the save slot, before Reset Exit
+            bwr(32'h5000_0000, 0); bwr(32'h5000_0004, 5); bwr(32'h5000_0008, 3); bwr(32'h5000_000C, 2);
             bwr(32'h5000_0014, 1);
-            f[0] = 32'h414D_4253; f[1] = 32'h0100_0001; f[2] = 32'd4242; f[3] = 32'h0000_2251;
+            f[0] = 32'h414D_4253; f[1] = 32'h0100_0001; f[2] = 32'd4242; f[3] = 32'h0000_2241;
             f[4] = 0; f[5] = 0; f[6] = 0; f[7] = chk(f[0], f[1], f[2], f[3], f[4], f[5], f[6]);
             for (i = 0; i < 8; i = i + 1) bwr(32'h6000_0000 + 4 * i, f[i]);
         end else begin
@@ -105,6 +106,14 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
             bwr(32'h5000_0018, 123);
         end
         reset_n = 1;
+        if (RESTORE) begin
+            // after Reset Exit the menu reads the save file's settings (D59)
+            repeat (4) @(negedge clk);
+            brd(32'h5000_0000, v); want_eq(v, 1, "boot: mode");
+            brd(32'h5000_0004, v); want_eq(v, 4, "boot: density");
+            brd(32'h5000_0008, v); want_eq(v, 2, "boot: brightness");
+            brd(32'h5000_000C, v); want_eq(v, 2, "boot: reverb");
+        end
         wait (dut.u_sys.cpu_rstn);
         $display("engine ready (SRAM cleared) at %0t ns", $time / 1000);
         while (dut.tick_n < ms) begin
@@ -123,26 +132,26 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
         repeat (200) @(posedge clk);
         cmax = dut.u_sys.tick_cycles_max; gmin = dut.gap_min; gmax = dut.gap_max;   // before any reset
         if (RESTORE) begin
-            // Down with the buttons: density 5 -> 4 (composer status), then Quit: reset, then reads
+            // Down with the buttons: density 4 -> 3 (composer status), then Quit: reset, then reads
             @(negedge clk) keys[1] = 1'b1;
             r = dut.tick_n; while (dut.tick_n < r + 3) @(posedge clk);
             @(negedge clk) keys[1] = 1'b0;
             r = dut.tick_n; while (dut.tick_n < r + 3) @(posedge clk);
-            want_eq(dut.st_density, 4, "status density");
+            want_eq(dut.st_density, 3, "status density");
             want_eq(dut.st_seed, 4242, "status seed");
             @(negedge clk) reset_n = 0;
             repeat (100) @(negedge clk);
             brd(32'h5000_0000, v); want_eq(v, 1, "quit: mode");
-            brd(32'h5000_0004, v); want_eq(v, 4, "quit: density");
+            brd(32'h5000_0004, v); want_eq(v, 3, "quit: density");
             brd(32'h5000_0008, v); want_eq(v, 2, "quit: brightness");
             brd(32'h5000_000C, v); want_eq(v, 2, "quit: reverb");
             brd(32'h5000_0010, v); want_eq(v, 0, "quit: visuals");
             brd(32'h5000_001C, v); want_eq(v, 0, "quit: sleep");
             brd(32'h5000_0014, v); want_eq(v, 1, "quit: lock seed");
             brd(32'h5000_0018, v); want_eq(v, 4242, "quit: seed");
-            f[3] = 32'h0000_2241; f[7] = chk(f[0], f[1], f[2], f[3], f[4], f[5], f[6]);
+            f[3] = 32'h0000_2231; f[7] = chk(f[0], f[1], f[2], f[3], f[4], f[5], f[6]);
             for (i = 0; i < 8; i = i + 1) begin brd(32'h6000_0000 + 4 * i, v); want_eq(v, f[i], "quit: save word"); end
-            $display("quit reads: menu TIDES / 4 / 2 / High / lock / seed 4242, save file %h %h %h %h .. %h",
+            $display("quit reads: menu TIDES / 3 / 2 / High / lock / seed 4242, save file %h %h %h %h .. %h",
                      f[0], f[1], f[2], f[3], f[7]);
         end else begin
             // the menu reads the composer's live values
