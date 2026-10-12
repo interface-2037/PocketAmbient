@@ -26,7 +26,7 @@ Echo is capped at 750 ms per side (the spec allows up to 800 ms if it fits). Ech
 | FDN (2 extra reads on the modulated lines) | 10 | 8 |
 | **Total** | **19** | **15** |
 
-34 accesses per sample, measured by the renderer. At 74.25 MHz there are ~1,546 cycles per sample. Even at 4 cycles per async access (to be confirmed against the datasheet), that's 136 cycles, ≈ 9% of the sample period (spec target: ≥ 20% slack). **[VERIFY]** SRAM timing.
+34 accesses per sample, measured by the renderer. At 74.25 MHz there are ~1,546 cycles per sample. Even at 4 cycles per async access, that's 136 cycles, ≈ 9% of the sample period (spec target: ≥ 20% slack). **Measured on hardware (v0.2.3, D47):** with the default 10-cycle reads / 8-cycle writes, the whole engine (voices + FX + SRAM) takes at most 684 cycles per sample (HUSH), 44% of the period, so 56% slack.
 
 ## BRAM (M10K, ~385 KB total): estimate
 

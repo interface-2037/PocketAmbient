@@ -145,7 +145,7 @@ static void out_close(out_t *o)
     if (o->wav) {
         uint8_t h[WAV_HDR];
         wav_header(h, o->data_bytes);
-        _fseeki64(o->f, 0, SEEK_SET);
+        fseek(o->f, 0, SEEK_SET);      /* offset 0 fits a long on every host */
         fwrite(h, 1, WAV_HDR, o->f);
     }
     fclose(o->f);
@@ -195,7 +195,7 @@ int main(int argc, char **argv)
         else if (ARG("--seconds")) dur_ms = parse_ms(v);
         else if (ARG("--out")) out_path = v;
         else if (ARG("--events")) ev_path = v;
-        else if (ARG("--press")) { char *s = strdup(v); parse_press_list(s); free(s); }
+        else if (ARG("--press")) { char *s = malloc(strlen(v) + 1); strcpy(s, v); parse_press_list(s); free(s); }
         else if (ARG("--script")) load_script(v);
         else if (ARG("--tick-start")) tick0 = strtoull(v, NULL, 0);
         else if (ARG("--from")) from_ms = parse_ms(v);

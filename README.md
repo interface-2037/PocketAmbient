@@ -15,9 +15,12 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 
 | Phase | State |
 |---|---|
-| 0: template + hello tone on hardware | not started (needs the openFPGA core template and Quartus) |
-| **1: C model + composer + renderer** | **implemented; automated checks pass, awaiting the listening review** |
-| 2–6: RTL, FX, CPU, controls/video, timing/soak | not started |
+| 0: template + hello tone on hardware | done; v0.1.0 tested on hardware (2026-10-10) |
+| 1: C model + composer + renderer | done; signed off after listening round 3 (2026-10-10) |
+| 2: voice engine RTL | done; bit-exact vs the C model (Icarus) |
+| 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12), one open item: tick overruns (docs/TEST_REPORT.md) |
+| **4: CPU integration** | **next** |
+| 5–6: controls/video, timing/soak | not started |
 
 ## Layout
 
@@ -84,5 +87,5 @@ Menu settings (`interact.json`): mode, density, brightness, reverb Low/Med/High,
 
 ## Known limitations
 
-- Hardware phases haven't started, so nothing runs on a Pocket yet.
+- The current hardware build (v0.2.x) is an engine test: it replays recorded composer excerpts. The composer runs on the Pocket from Phase 4.
 - The host renderer runs at ~90–140× realtime (spec target 200×). See docs/DECISIONS.md D14.

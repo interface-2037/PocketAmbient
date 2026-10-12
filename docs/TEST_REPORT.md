@@ -1,5 +1,21 @@
 # Test report
 
+## Phase 3: engine test on hardware (2026-10-12)
+
+Build v0.2.3 (`engine_test.sv`): SRAM BIST, then recorded composer excerpts (seed 123, `tools/gen_vecrom.py`) replayed through the real voice engine, FX engine and SRAM. Tested by the user; screenshots taken a few seconds into each excerpt. **All four excerpts sound good.**
+
+| | DRIFT | TIDES | MOTHER | HUSH |
+|---|---|---|---|---|
+| Play time at screenshot | 00:13 | 00:08 | 00:09 | 00:04 |
+| Max engine cycles / sample | 0x266 = 614 | 0x284 = 644 | 0x298 = 664 | 0x2AC = 684 |
+| Tick overruns | **FF** | **FF** | **FF** | **FF** |
+
+- **SRAM BIST:** all four wait-state pairs (6,5) (5,4) (4,3) (3,2) pass with 0 errors over all 131,072 words. The 55 ns simulation model fails the last two pairs on purpose, so the real part is faster than assumed.
+- **Cycle budget:** the worst case is 684 of 1,546.875 cycles per sample (44%), well inside the ≥ 20% slack target.
+- **Open: tick overruns.** The counter (8-bit, saturating) reads FF in every excerpt. An overrun is a 48 kHz frame tick that arrives while the engine is still busy with the previous sample. With the measured ≤ 684 busy cycles and write bursts of ≤ 302 writes, evenly spaced ticks can't produce one. Re-run 2026-10-12 on Linux (Icarus 12): `tb_player` (6,000 samples per excerpt) and `tb_engine_test` (3,000 DRIFT samples through the pin-level SRAM model) are bit-exact with **0 overruns**. The difference is the tick. The testbenches make it directly in `clk_74a`; on hardware it comes from the LRCK edge in `core_top.v`. Suspect: extra or irregular ticks from the I2S clock chain (MCLK accumulator → ripple-clocked SCLK/LRCK → synchroniser). This is not audible in the test, but in Phase 4 the composer is paced by the same tick, so it must be explained first. Next hardware build: show the minimum and maximum tick spacing (in `clk_74a` cycles) and the tick count next to the sample count.
+- The title line on the test screen read "ENGINE TEST V0.2.1": `screen_test.hex` hadn't been regenerated after the version bump. Regenerated now.
+
+
 ## Phase 1: host model + composer (2026-10-10)
 
 Build: WinLibs GCC 16.2, `-O2`. Raw results: `reports/2026-10-09-full/` (JSON, plots, traces).
