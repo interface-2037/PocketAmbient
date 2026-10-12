@@ -8,7 +8,7 @@ Build on the PC (Quartus Lite 25.1std). The default fitter seed missed hold by â
 |---|---|
 | 1. Power-cycle, version 0.4.4 | **pass** |
 | 2. Button changes (Density via Down, Brightness via L/R, Mode via Left/Right) survive a power cycle; menu shows the same values | **pass** |
-| 3. A menu change (Reverb High) survives a power cycle | **pass** |
+| 3. A menu change survives a power cycle | **pass**: Reverb was already High, so the user changed it to Low in the menu; Low came back after the power cycle |
 | 4. Lock Seed on: same seed after a power cycle | **pass** |
 | 5. Files on the card after the last power-off | `ambient.sav`: 32 bytes, magic `AMBS`, format 1, Lock 1, seed `FD5ADEF7`, settings MOTHER / Density 4 / Brightness 1 / Reverb Low, check word valid. `interact_persist.json`: Mode 1 (stale APF menu cache), Density 4, Brightness 1, Lock 1. The `.sav` takes precedence at a cold start (D59), so the stale menu mode does not matter. |
 
