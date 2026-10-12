@@ -343,7 +343,19 @@ typedef struct {
     uint64_t zero_from_ms;
     int      gain_monotonic_violations;
     int32_t  peak;
+    uint64_t fx_from_ms, fx_to_ms; /* count FX register / FX set changes in ticks [from, to) */
+    int      fx_changes;
+    double  *env;                  /* optional: mean square of each 20 ms window */
 } run_out_t;
+
+static int fx_differs(const uint32_t *fx0, const comp_t *c0)
+{
+    const comp_t *cs = composer_state();
+    for (unsigned i = 0; i < FX_NUM_REGS; i++)
+        if (i != FX_MASTER_TARGET && i != FX_MASTER_STEP && i != FX_STATUS_GAIN && S.fx[i] != fx0[i]) return 1;
+    return memcmp(&cs->fx_cur, &c0->fx_cur, sizeof cs->fx_cur) || memcmp(&cs->fx_tgt, &c0->fx_tgt, sizeof cs->fx_tgt) ||
+           cs->fx_ramp != c0->fx_ramp;
+}
 
 static void run_system(const run_cfg_t *c, run_out_t *o)
 {
@@ -366,13 +378,21 @@ static void run_system(const run_cfg_t *c, run_out_t *o)
     o->nonzero_after = 0;
     o->gain_monotonic_violations = 0;
     o->peak = 0;
+    o->fx_changes = 0;
+    uint32_t fx0[FX_NUM_REGS];
+    comp_t c0;
+    double acc = 0;
     for (uint64_t t = 0; t < c->ms; t++) {
         for (int i = 0; i < c->npress; i++) if (c->press[i].at == t) halm_press(c->press[i].btn);
         halm_set_tick(c->tick0 + t);
+        memcpy(fx0, S.fx, sizeof fx0);
+        c0 = *composer_state();
         composer_tick();
+        if (t >= o->fx_from_ms && t < o->fx_to_ms) o->fx_changes += fx_differs(fx0, &c0);
         for (unsigned k = 0; k < AP_TICK_SAMPLES; k++) {
             int16_t l, r;
             sm_process(&S, &l, &r);
+            acc += (double)l * l + (double)r * r;
             h = (h ^ (uint16_t)l) * 1099511628211ull;
             h = (h ^ (uint16_t)r) * 1099511628211ull;
             if (o->zero_from_ms && t >= o->zero_from_ms && (l || r)) o->nonzero_after++;
@@ -386,6 +406,10 @@ static void run_system(const run_cfg_t *c, run_out_t *o)
             }
             prev_tgt = tgt;
             prev_gain = S.master_gain;
+        }
+        if (t % 20 == 19) {
+            if (o->env) o->env[t / 20] = acc / (20.0 * AP_TICK_SAMPLES * 2);
+            acc = 0;
         }
     }
     o->hash = h;
@@ -494,6 +518,84 @@ TEST(test_stop_switch)
                     CHECK(cs->state == CS_TITLE && on_after == 0, "mode %u dir %d: notes after the stop", m, dir);
                 }
             }
+}
+
+/* D56: a mode change in the stop fade-out leaves the FX alone until the gain reaches 0, so the old
+ * piece's tail never gets louder; the new mode's FX are set at the title. From every mode to every
+ * other mode, at three points in the fade. A again in the fade then ramps the FX from the old set. */
+TEST(test_fade_switch)
+{
+    enum { STOP = 8000, END = STOP + 3000 + 50, MS = END + 100, NW = MS / 20 };
+    static const uint64_t off[3] = {100, 1500, 2900};
+    static double ref[NW], sw[NW];
+    const double floor_ms = 10.0, tol = 1.2589;           /* mean square: about -80 dBFS; +1 dB */
+    fxset_t want[MODE_COUNT];
+    for (uint32_t m = 0; m < MODE_COUNT; m++) {           /* each mode's FX set on its title screen */
+        run_cfg_t c = {0};
+        run_out_t o = {0};
+        c.mode = m; c.ms = 2;
+        run_system(&c, &o);
+        want[m] = composer_state()->fx_tgt;
+    }
+    for (uint32_t m = 0; m < MODE_COUNT; m++) {
+        run_cfg_t c = {0};
+        run_out_t o = {0};
+        c.mode = m; c.seed = 21 + m; c.ms = MS;
+        c.press[0].at = 1; c.press[0].btn = BTN_A;
+        c.press[1].at = STOP; c.press[1].btn = BTN_A;    /* stop: 3 s fade */
+        c.npress = 2;
+        o.env = ref;
+        run_system(&c, &o);
+        for (uint32_t k = 0; k < MODE_COUNT; k++)        /* k = 0: a reseed (B) instead */
+            for (int at = 0; at < 3; at++) {
+                uint64_t ts = STOP + off[at];
+                uint32_t to = (m + k) % MODE_COUNT;
+                c.npress = 2;
+                for (uint32_t i = 0; i < (k ? k : 1); i++) {  /* k presses of Right, one per tick */
+                    c.press[c.npress].at = ts + i;
+                    c.press[c.npress++].btn = k ? BTN_RIGHT : BTN_B;
+                }
+                o = (run_out_t){0};
+                o.env = sw; o.fx_from_ms = ts; o.fx_to_ms = END;
+                run_system(&c, &o);
+                const comp_t *cs = composer_state();
+                CHECK(o.fx_changes == 0, "mode %u -> %u at +%llu ms: %d FX changes during the fade", m, to,
+                      (unsigned long long)off[at], o.fx_changes);
+                CHECK(cs->state == CS_TITLE && cs->mode == to && cs->fx_ramp == 0 &&
+                      !memcmp(&cs->fx_cur, &want[to], sizeof want[to]) && !memcmp(&cs->fx_tgt, &want[to], sizeof want[to]),
+                      "mode %u -> %u at +%llu ms: title FX are not the new mode's", m, to, (unsigned long long)off[at]);
+                double over = 0;                          /* 20 ms windows: louder than without the switch? */
+                for (int w = (int)(ts / 20) + 1; w < END / 20; w++)
+                    if (ref[w] > floor_ms && sw[w] / ref[w] > over) over = sw[w] / ref[w];
+                CHECK(over <= tol, "mode %u -> %u at +%llu ms: the tail is x%.2f louder (power) than without the switch",
+                      m, to, (unsigned long long)off[at], over);
+            }
+        /* switch, then A within the fade: the new mode's FX ramp from the old set over XFADE_MS */
+        c.npress = 4;
+        c.press[2].at = STOP + 1000; c.press[2].btn = BTN_RIGHT;
+        c.press[3].at = STOP + 1500; c.press[3].btn = BTN_A;
+        c.ms = STOP + 1500;
+        o = (run_out_t){0};
+        o.fx_from_ms = STOP + 1000; o.fx_to_ms = STOP + 1500;
+        run_system(&c, &o);
+        fxset_t old = composer_state()->fx_cur;
+        CHECK(o.fx_changes == 0, "mode %u: %d FX changes between the switch and A", m, o.fx_changes);
+        c.ms = STOP + 1501;
+        o = (run_out_t){0};
+        run_system(&c, &o);
+        const comp_t *cs = composer_state();
+        uint32_t to = (m + 1) % MODE_COUNT;
+        const int32_t *o32 = (const int32_t *)&old, *c32 = (const int32_t *)&cs->fx_cur,
+                      *t32 = (const int32_t *)&cs->fx_tgt;
+        int jump = 0;
+        for (unsigned i = 0; i < sizeof(fxset_t) / sizeof(int32_t); i++) {
+            int32_t d = c32[i] - o32[i], span = t32[i] - o32[i];
+            jump += (d < 0 ? -d : d) > (span < 0 ? -span : span) / (int32_t)XFADE_MS + 1;
+        }
+        CHECK(cs->state == CS_PLAYING && cs->m_mode == to && cs->fx_ramp == XFADE_MS - 1 &&
+              !memcmp(&cs->fx_tgt, &want[to], sizeof want[to]) && jump == 0,
+              "mode %u: switch + A in the fade does not ramp the FX from the old set (%d jumps)", m, jump);
+    }
 }
 
 /* the voice allocator never steals a gated voice, and frees voices after release */
@@ -644,6 +746,7 @@ int main(int argc, char **argv)
     RUN(test_fades_and_stop);
     RUN(test_stress_switching);
     RUN(test_stop_switch);
+    RUN(test_fade_switch);
     RUN(test_tides_system);
     RUN(test_drift_system);
     RUN(test_tick_overflow);

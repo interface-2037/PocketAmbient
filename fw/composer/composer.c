@@ -199,7 +199,7 @@ static void do_start(comp_t *c)
     if (c->state == CS_STOPPING) {           /* change of heart: fade back in */
         master_fade(GAIN_UNITY, FADE_IN_MS);
         set_state(c, CS_PLAYING);
-        if (c->m_mode != c->mode) mode_begin(c, XFADE_MS);   /* the mode changed during the fade */
+        if (c->m_mode != c->mode) mode_begin(c, XFADE_MS);   /* the piece ended during the fade */
         return;
     }
     c->play_start = c->now;
@@ -223,10 +223,11 @@ static void do_switch(comp_t *c, uint8_t new_mode)
         mode_begin(c, XFADE_MS);
     } else {
         /* Stopped or fading out: the new mode starts with the next start. c->m is a union, so
-         * the old mode's state must not be run as the new mode's (D53): end the old piece now. */
+         * the old mode's state must not be run as the new mode's (D53): end the old piece now.
+         * Its tail keeps its FX until the fade-out reaches 0, where they change (D56). */
         if (c->state == CS_STOPPING && c->m_mode != MODE_COUNT) mode_end(c);
         c->mode = new_mode;
-        fx_retarget(c, 0);
+        if (c->state == CS_TITLE) fx_retarget(c, 0);
     }
 }
 
@@ -236,6 +237,8 @@ static void do_reseed(comp_t *c)
     if (c->state == CS_PLAYING) {
         mode_end(c);
         mode_begin(c, XFADE_MS);
+    } else if (c->state == CS_STOPPING && c->m_mode != MODE_COUNT) {
+        mode_end(c);        /* the fading piece must not run on with the new key and weather (D56) */
     }
 }
 
@@ -363,6 +366,7 @@ void composer_tick(void)
         /* master gain is now exactly 0: silence everything and go back to the title */
         sched_init(&c->sched);
         voices_kill_all(env_release_ms(50));
+        if (c->m_mode != c->mode) fx_retarget(c, 0);    /* the piece ended during the fade (D56) */
         set_state(c, CS_TITLE);
     }
     write_status(c);

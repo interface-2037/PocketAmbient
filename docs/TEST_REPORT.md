@@ -1,5 +1,52 @@
 # Test report
 
+## v0.4.2: mode change / reseed during the stop fade-out (simulation, 2026-10-12)
+
+Fix for the v0.4.1 hardware report (HW_TEST_NEXT step 5): Right during the 3 s stop fade gave the old
+tail a short volume boost. Cause confirmed: `do_switch()` snapped the FX set (trim, dry, reverb, echo)
+to the new mode with `fx_retarget(c, 0)` while the old tail was still audible. Fix and audit: D56.
+No RTL change. Hardware checklist: `docs/HW_TEST_NEXT.md`.
+
+**A. Level during the fade (host render, 20 ms RMS windows above −70 dBFS)**
+
+Stop at 20 s, then a menu mode change at +0.25 / 0.75 / 1.5 / 2.25 / 2.75 s into the fade. All 12 mode
+pairs × seeds 5, 77, 4242 (180 runs), each compared with the same fade without the change.
+
+| Metric | v0.4.1 | v0.4.2 |
+|---|---|---|
+| Max tail level above the same fade without the change | **+8.98 dB** (TIDES → DRIFT) | **+0.00 dB** |
+| Max 20 ms rise beyond the reference fade's own rise, worst pair | +6.78 dB (TIDES → DRIFT) | +1.04 dB (TIDES → any)¹ |
+| Per pair, v0.4.1 (dB): DRIFT → TIDES / HUSH / MOTHER | +0.87 / −0.20 / −0.14 | −0.02 for all three |
+| TIDES → DRIFT / HUSH / MOTHER | +6.78 / +4.64 / +1.63 | +1.04 for all three¹ |
+| HUSH → DRIFT / TIDES / MOTHER | +3.10 / −0.74 / −1.35 | −0.28 for all three |
+| MOTHER → DRIFT / TIDES / HUSH | +3.11 / −0.35 / +1.52 | −0.18 for all three |
+
+¹ Now the same for every target mode, so it does not come from the FX. It is an echo repeat that
+stands out of the released (quieter) tail. It stays below the level of the fade without the change.
+
+Other inputs during the fade (same runs: 4 modes × 3 seeds × 5 points, vs the fade without the input):
+
+| Input during the fade | Level above the reference, v0.4.1 → v0.4.2 | Verdict |
+|---|---|---|
+| Reseed (B, or menu Reseed) | **+1.70 dB → +0.00 dB** (20 ms rise +4.78 dB before) | fixed: the fading piece is ended (D56) |
+| Density + / − (Up / Down) | +2.16 / +0.01 dB, unchanged | next notes of the fading piece, as during play |
+| Brightness + / − (R / L) | +0.42 / +0.52 dB, unchanged | as during play |
+| Menu reverb 1 → 2 / 1 → 0 | +4.14 / +0.12 dB, unchanged; 20 ms rise beyond the reference ≤ +0.35 dB | 2 s ramp, as during play (no step) |
+| X / Y | 0.00 dB, byte-identical | no audio |
+
+**B. Checks**
+
+| Check | Result |
+|---|---|
+| Unit tests (`make test`) incl. new `test_fade_switch`: from every mode, 1–3 Right presses (to every other mode) or B, at +0.1 / 1.5 / 2.9 s into the fade. No FX register write and no FX-set change from the press to the end of the fade, title FX = the new mode's, tail never above the fade without the press (+1 dB tolerance), and change + A in the fade ramps the FX from the old set over 6 s | **495,160 checks, 0 failed**. The same test on the v0.4.1 composer: 49 failures |
+| Music unchanged: v0.4.1 vs v0.4.2 host render, 4 modes × seeds 7, 31337 × {autostart only; 24 presses and menu changes: switches while playing and on the title screen, stop / start, A again in a fade, reseed (B and menu), density, brightness, reverb, X / Y}, 120 s each | **16 / 16 byte-identical** (audio and event trace). A first script that had a menu mode change in a fade by mistake differed from 114.0 s, exactly at that change |
+| Firmware on the ISS == host render (`tools/check_fw.sh 60`) | **bit-identical**, all modes |
+| ISS, 50 s: `20:A,21:RIGHT,25:A,40:A,41.5:LEFT,41.6:LEFT,44:B` (stop + switch in the fade, restart, stop + two switches + reseed in the fade) | **bit-identical**, all modes |
+| ISS, 60 s: `20:A,21:RIGHT,21.5:A,35:A,36:B,37:A` + menu `45:MODE=2` (switch + A in the fade, reseed + A in the fade) | **bit-identical**, all modes |
+| ISS, 30 s: `19:A` + menu `20:MODE=3,22:MODE=1` (menu mode changes in the fade) | **bit-identical**, all modes |
+| Full system, Verilator (`sim/run_sys.sh` model and flow), 21 s per mode, presses `6:A,6.5:RIGHT,9.5:A,13:A,13.4:LEFT,13.8:A,17:A,17.5:B,18:RIGHT` (stop + switch in the fade, then start from the title; stop + switch + A in the fade; stop + reseed + switch in the fade) | **bit-identical**, all modes (1,008,000 samples each); CPU max 230,625–230,675 cycles/tick; FIFO min 511–514; 0 underruns |
+| `make fw` | `composer.hex` regenerated: 48,934 of 65,536 bytes |
+
 ## v0.4.1: fixes, timing margin, Phase 6 soak (simulation, 2026-10-12)
 
 No Quartus in the cloud environment (see below), so the fit and timing are measured by the PC build. Everything here is simulation. Hardware checklist: `docs/HW_TEST_NEXT.md`.

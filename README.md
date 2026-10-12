@@ -20,7 +20,7 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 | 2: voice engine RTL | done; bit-exact vs the C model (Icarus) |
 | 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12); tick spacing confirmed on hardware with v0.4.0 |
 | 4: CPU integration | done; v0.4.0 tested on hardware (2026-10-11), firmware from the SD card works |
-| 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11). v0.4.1 fixes the title-screen readouts after a stopped mode change (D53) and adds the platform art and icon (D54) |
+| 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11). v0.4.1 fixes the title-screen readouts after a stopped mode change (D53) and adds the platform art and icon (D54). v0.4.2: a mode change or reseed during the stop fade-out no longer raises the fading tail's level (D56) |
 | 6: timing closure, soak | v0.4.1: FX multiplier pipelined and the menu status path registered for timing margin (D55); 10.2 M-sample voice-engine soak and mutation check pass (docs/TEST_REPORT.md). Hardware fit and test pending |
 
 ## Layout
@@ -109,5 +109,5 @@ Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/
 
 ## Known limitations
 
-- v0.4.0 was the first build with everything: live composer, buttons, core menu and the per-mode screens. Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the CPU stopped. v0.4.1 is a fix and margin release; what to check on the Pocket is in `docs/HW_TEST_NEXT.md`.
+- v0.4.0 was the first build with everything: live composer, buttons, core menu and the per-mode screens. Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the CPU stopped. v0.4.1 is a fix and margin release and v0.4.2 a fade-out fix; what to check on the Pocket is in `docs/HW_TEST_NEXT.md`.
 - The host renderer runs at ~90–140× realtime (spec target 200×). See docs/DECISIONS.md D14.
