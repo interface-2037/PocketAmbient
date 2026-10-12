@@ -1,21 +1,20 @@
-// tb_sys_test.sv - integration test of the Phase 4 hardware test top (sys_test): boot through
+// tb_ap_top.sv - integration test of ap_top (the core below core_top): boot through
 // the pin-level 55 ns SRAM model (engine clears the SRAM), CPU runs composer_init and the
-// first ticks with 48 kHz frame ticks, autostart press of A; checks the screen fields and
-// that the first samples equal the model's (render --mode drift --seed 123, in ref.raw).
-//   vvp tb_sys_test.vvp [+ms=N]
-// Compiled with -P tb_sys_test.SLOT=1 '-Ptb_sys_test.FW="../../sim/out/zero.hex"' the CPU RAM
+// first ticks with 48 kHz frame ticks, autostart press of A; checks that the first samples equal
+// the model's (render --mode drift --seed 123, in ref.raw) and that the menu reads back.
+//   vvp tb_ap_top.vvp [+ms=N]
+// Compiled with -P tb_ap_top.SLOT=1 '-Ptb_ap_top.FW="../../sim/out/zero.hex"' the CPU RAM
 // starts empty and the firmware is
 // streamed in over the bridge while reset_n is low, like an APF data slot (big-endian words).
 `timescale 1ns/1ps
-module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex");
-    reg clk = 0, reset_n = 0;
+module tb_ap_top #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex");
+    reg clk = 0, reset_n = 0, vclk = 0;
+    wire fault;
     always #6.734 clk = ~clk;
+    always #40.69 vclk = ~vclk;
     reg  [31:0] keys = 0;
     reg         tick = 0;
     wire [15:0] pcm_l, pcm_r;
-    wire        txt_we;
-    wire [9:0]  txt_addr;
-    wire [7:0]  txt_data;
     wire [16:0] sram_a;
     wire [15:0] sram_dq;
     wire        sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n;
@@ -26,17 +25,14 @@ module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex")
     reg  [31:0] fw [0:16383];
     initial $readmemh("core/cpu/composer.hex", fw);
 
-    sys_test #(.FW_HEX(FW)) dut (.clk(clk), .reset_n(reset_n),
+    ap_top #(.FW_HEX(FW)) dut (.clk(clk), .reset_n(reset_n),
         .bridge_wr(bridge_wr), .bridge_rd(bridge_rd), .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
-        .settings_rd_data(settings_rd_data), .rtc_epoch(32'd1760000000), .cont1_key(keys), .tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
-        .txt_we(txt_we), .txt_addr(txt_addr), .txt_data(txt_data), .sram_a(sram_a), .sram_dq(sram_dq),
+        .settings_rd_data(settings_rd_data), .rtc_epoch(32'd1760000000), .cont1_key(keys),
+        .vclk(vclk), .vsync(1'b0), .vx(10'd0), .vy(10'd0), .rgb(), .fault(fault), .tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
+.sram_a(sram_a), .sram_dq(sram_dq),
         .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n), .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n));
     async_sram_model u_mem (.a(sram_a), .dq(sram_dq), .oe_n(sram_oe_n), .we_n(sram_we_n),
         .ub_n(sram_ub_n), .lb_n(sram_lb_n), .host_drive(dut.u_sram.dq_oe));
-
-    reg [7:0] screen [0:1023];
-    initial $readmemh("core/ui/screen_test.hex", screen);
-    always @(posedge clk) if (txt_we) screen[txt_addr] <= txt_data;
 
     // 48 kHz frame ticks from a fractional accumulator, like core_top
     integer acc = 0;
@@ -52,7 +48,6 @@ module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex")
 
     integer fr, n, bad, i, r, ms;
     reg [15:0] el, er;
-    reg [8*20-1:0] row;
     initial begin
         if (!$value$plusargs("ms=%d", ms)) ms = 30;
         fr = $fopen("ref.raw", "rb");
@@ -89,7 +84,7 @@ module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex")
                 end
                 n = n + 1;
             end
-            if (dut.u_sys.trap || dut.u_sys.bus_err) begin $display("FAIL: trap %b bus_err %b", dut.u_sys.trap, dut.u_sys.bus_err); $finish; end
+            if (fault) begin $display("FAIL: trap %b bus_err %b", dut.u_sys.trap, dut.u_sys.bus_err); $finish; end
         end
         repeat (200) @(posedge clk);
         // the menu reads the composer's live values
@@ -97,14 +92,10 @@ module tb_sys_test #(parameter SLOT = 0, parameter FW = "core/cpu/composer.hex")
         @(negedge clk) bridge_rd = 0;
         $display("menu: seed register reads %0d", settings_rd_data);
         if (settings_rd_data != 123) bad = bad + 1;
-        for (r = 4; r <= 13; r = r + 1) begin
-            for (i = 0; i < 20; i = i + 1) row[8 * (19 - i) +: 8] = (screen[r * 32 + i] & 8'h3F) + 8'd32;
-            $display("screen row %2d: \"%s\"", r, row);
-        end
         if (bad == 0 && n == ms * 48 && u_mem.errors == 0)
-            $display("PASS sys_test: %0d samples bit-exact through the SRAM pins, CPU max %0d cycles/tick, frame gap %0d..%0d",
+            $display("PASS ap_top: %0d samples bit-exact through the SRAM pins, CPU max %0d cycles/tick, frame gap %0d..%0d",
                      n, dut.u_sys.tick_cycles_max, dut.gap_min, dut.gap_max);
-        else $display("FAIL sys_test: %0d mismatches in %0d samples, %0d SRAM timing errors", bad, n, u_mem.errors);
+        else $display("FAIL ap_top: %0d mismatches in %0d samples, %0d SRAM timing errors", bad, n, u_mem.errors);
         $finish;
     end
 endmodule

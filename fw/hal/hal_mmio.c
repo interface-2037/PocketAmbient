@@ -4,6 +4,7 @@
  * engine commits at the next tick boundary; status reads are tick snapshots.
  */
 #include "hal.h"
+#include "../ui/ui.h"
 
 #define REG32(addr) (*(volatile uint32_t *)(uintptr_t)(addr))
 
@@ -32,5 +33,5 @@ uint64_t hal_ticks(void)
     return ((uint64_t)hi << 32) | lo;
 }
 
-void hal_visual_event(uint32_t ev) { REG32(AP_MMIO_VISUAL) = ev; }
+void hal_visual_event(uint32_t ev) { ui_event(ev); }   /* the UI runs on this CPU (fw/ui) */
 void hal_trace(uint32_t kind, uint32_t a, uint32_t b, uint32_t c) { (void)kind; (void)a; (void)b; (void)c; }

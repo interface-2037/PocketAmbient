@@ -189,6 +189,9 @@ struct comp {
 
 extern const mode_ops_t MODE_DRIFT_OPS, MODE_TIDES_OPS, MODE_HUSH_OPS, MODE_MOTHER_OPS;
 
+/* read-only view of the composer for the UI (fw/ui) */
+const comp_t *composer_state(void);
+
 /* helpers implemented in composer.c */
 int32_t  c_density_q8(const comp_t *c);      /* 256..1280: user density +/- weather */
 int32_t  c_bright_q8(const comp_t *c);       /* 256..1280 */

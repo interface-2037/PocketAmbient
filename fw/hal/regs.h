@@ -18,6 +18,12 @@
 #define AP_MMIO_FX       0x10001000u  /* 64 words */
 #define AP_MMIO_CTRL     0x10002000u  /* 64 words */
 #define AP_MMIO_VISUAL   0x10003000u  /* write = push visual event */
+#define AP_MMIO_VIDEO    0x10004000u  /* video control (VC_*) */
+#define AP_FB_WORDS      0x30000000u  /* back framebuffer, 5760 words: 2 bpp, 16 px/word, LSBs = left */
+#define AP_FB_PIXEL      0x31000000u  /* write-only: + (((y << 9) | x) << 2), data[1:0] = colour */
+#define AP_FB_W          320u
+#define AP_FB_H          288u
+#define AP_FB_WPL        20u          /* words per line */
 
 /* ---- Voice registers (word index inside a voice's 32-word block) ---- */
 #define VR_GATE       0   /* bit0 gate, bit1 trigger strobe (self-clearing) */
@@ -137,7 +143,17 @@ static const unsigned AP_AP_LEN[4] = { 142, 107, 379, 277 };
 #define CR_ST_OVERLAY    23
 #define CR_ST_REVERB     24
 #define CR_ST_SLEEP      25
+/* engine diagnostics (read-only; 0 on the host) */
+#define CR_DIAG_CPU_MAX  26  /* worst CPU cycles per tick */
+#define CR_DIAG_FIFO     27  /* [15:0] lowest audio-FIFO level since it primed */
+#define CR_DIAG_UNDERRUN 28  /* audio-FIFO underruns */
+#define CR_DIAG_FRAME    29  /* [31:16] shortest, [15:0] longest frame-tick gap (clk_74a cycles) */
 #define CR_NUM_REGS      32
+
+/* ---- Video control (AP_MMIO_VIDEO, word index) ---- */
+#define VC_PAL0          0   /* 0..3: back palette, 0x00RRGGBB; shown with the buffer it was set for */
+#define VC_SWAP          4   /* write: show the back buffer (and palette) at the next vsync */
+#define VC_STATUS        5   /* read: bit0 swap pending, [31:16] vsync count */
 
 /* button bits (match APF cont1_key ordering where possible) */
 #define BTN_UP     (1u << 0)

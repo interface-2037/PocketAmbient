@@ -26,7 +26,7 @@ module tb_engine_test;
 
     // text RAM mirror (checks the screen writer)
     reg [7:0] screen [0:1023];
-    initial $readmemh("core/ui/screen_test.hex", screen);
+    integer si; initial for (si = 0; si < 1024; si = si + 1) screen[si] = 8'h00;   // (the Phase 3 screen file is gone)
     always @(posedge clk) if (txt_we) screen[txt_addr] <= txt_data;
 
     integer tc = 0;

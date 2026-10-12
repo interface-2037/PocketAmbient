@@ -4,6 +4,7 @@
 //
 //   obj_dir/Vcpu_sys --mode drift --seed 123 --seconds 60 --out x.raw [--press SEC:BTN,...]
 //                    [--set SEC:NAME=VAL,...] [--no-autostart] [--fast] [--rd 10 --wr 8]
+//                    [--frames SEC,... --frame-prefix PATH]   (scanned-out video frames as PPM)
 //
 // Run from src/fpga (tables and firmware load relative to it, like Quartus).
 // SRAM: behavioural, ack after --rd / --wr cycles (default 10 / 8 = sram_ctrl at (6,5)),
@@ -48,6 +49,8 @@ int main(int argc, char **argv)
     std::vector<Press> presses;
     static setscript_t sets[4096];
     int nset = 0;
+    std::vector<uint64_t> frame_ms;
+    const char *frame_prefix = "frame";
     for (int i = 1; i < argc; i++) {
         const char *o = argv[i], *v = i + 1 < argc ? argv[i + 1] : "";
 #define ARG(n) (!strcmp(o, n) && ++i < argc)
@@ -76,6 +79,11 @@ int main(int argc, char **argv)
             }
         }
         else if (ARG("--set")) nset = setscript_parse(v, sets, nset, 4096);
+        else if (ARG("--frames")) {
+            std::vector<char> s(v, v + strlen(v) + 1);
+            for (char *t = strtok(s.data(), ","); t; t = strtok(nullptr, ",")) frame_ms.push_back((uint64_t)(atof(t) * 1000.0 + 0.5));
+        }
+        else if (ARG("--frame-prefix")) frame_prefix = v;
         else if (!strcmp(o, "--no-autostart")) autostart = 0;
         else if (!strcmp(o, "--fast")) fast = 1;
         else if (o[0] == '+') ;                                      // verilator plusargs
@@ -95,6 +103,48 @@ int main(int argc, char **argv)
     d->fw_we = 0; d->fw_addr = 0; d->fw_data = 0;
     d->cmd_reseed = 0; d->settings_seq = 0; d->rtc_epoch = 0; d->btn_edge = 0; d->frame_tick = 0;
     d->mem_ack = 0; d->mem_rd = 0;
+    d->vclk = 0; d->vsync = 0; d->vx = 0x3FF; d->vy = 0x3FF; d->diag_frame = 0;
+
+    // video timing as core_top: 400 x 512 pixel clocks per frame at 12.288 MHz, visible
+    // 320 x 288 from (10, 10); coordinates go in three clocks ahead of the colour
+    int xc = 0, yc = 0;
+    double vacc = 0.0;
+    std::vector<uint8_t> img(320 * 288 * 3);
+    size_t fi = 0;
+    int capturing = 0;
+    auto vclk_edge = [&]() {
+        d->vclk = 1;
+        d->vsync = xc == 0 && yc == 0;
+        int lx = xc + 3 - 10, ly = yc - 10;
+        d->vx = (uint32_t)(lx & 0x3FF);
+        d->vy = (uint32_t)(ly & 0x3FF);
+        d->eval();
+        // after this edge, rgb belongs to the pixel whose coordinates went in three edges ago:
+        // visible (xc - 10, yc - 10)
+        int ox = xc - 10, oy = yc - 10;
+        if (capturing && ox >= 0 && ox < 320 && oy >= 0 && oy < 288) {
+            uint32_t c = d->rgb;
+            uint8_t *q = &img[(oy * 320 + ox) * 3];
+            q[0] = (uint8_t)(c >> 16); q[1] = (uint8_t)(c >> 8); q[2] = (uint8_t)c;
+        }
+        if (++xc == 400) {
+            xc = 0;
+            if (++yc == 512) {
+                yc = 0;
+                if (capturing) {
+                    char path[512];
+                    snprintf(path, sizeof path, "%s_%06llu.ppm", frame_prefix, (unsigned long long)frame_ms[fi]);
+                    FILE *f = fopen(path, "wb");
+                    if (f) { fprintf(f, "P6\n320 288\n255\n"); fwrite(img.data(), 1, img.size(), f); fclose(f); }
+                    capturing = 0;
+                    fi++;
+                }
+                if (fi < frame_ms.size() && d->tick >= frame_ms[fi]) capturing = 1;
+            }
+        }
+        d->vclk = 0;
+        d->eval();
+    };
 
     std::vector<uint16_t> sram(131072);
     uint64_t rs = 0x9E3779B97F4A7C15ull;
@@ -113,7 +163,8 @@ int main(int argc, char **argv)
     d->rst = 1;
     for (int k = 0; k < 8; k++) { d->clk = 0; d->eval(); d->clk = 1; d->eval(); }
     d->rst = 0;
-    while (samples < want) {
+    while (samples < want || fi < frame_ms.size()) {
+        if (samples >= want && cyc > (uint64_t)(dur_ms + 200) * 74250ull) break;
         // inputs for this cycle (set before the rising edge)
         uint32_t edge = 0;
         while (pi < presses.size() && presses[pi].tick - 1 <= d->tick) edge |= presses[pi++].mask;
@@ -142,13 +193,15 @@ int main(int argc, char **argv)
         uint16_t sl = d->smp_l, sr = d->smp_r;
         d->clk = 1; d->eval();
         cyc++;
+        vacc += 12.288 / 74.25;                        // pixel clocks per system clock
+        while (vacc >= 1.0) { vacc -= 1.0; vclk_edge(); }
         if (req) {
             if (ack_cnt >= 0) { fprintf(stderr, "SRAM request while busy at cycle %llu\n", (unsigned long long)cyc); return 1; }
             if (we) sram[a] = wd; else ack_data = sram[a];
             ack_cnt = (we ? wr_lat : rd_lat) - 2;
             if (ack_cnt < 0) ack_cnt = 0;
         }
-        if (sv) {
+        if (sv && samples < want) {
             if (out) { int16_t s2[2] = {(int16_t)sl, (int16_t)sr}; fwrite(s2, sizeof s2, 1, out); }
             samples++;
         }

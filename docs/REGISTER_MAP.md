@@ -10,7 +10,10 @@
 | `0x1000_0000` | 4 KB | Voice registers: voice `v`, word `r` at `0x1000_0000 + (v·32 + r)·4` |
 | `0x1000_1000` | 256 B | FX / master registers |
 | `0x1000_2000` | 256 B | Control / status |
-| `0x1000_3000` | 4 B | Visual event FIFO (write) |
+| `0x1000_3000` | 4 B | Visual events (unused in hardware: the UI runs on the same CPU, `hal_visual_event` queues them in RAM) |
+| `0x1000_4000` | 24 B | Video control: `VC_PAL0..3` back palette (0x00RRGGBB), `VC_SWAP` (show the back buffer at the next vsync), `VC_STATUS` (bit 0 swap pending, [31:16] vsync count) |
+| `0x3000_0000` | 23,040 B | Back framebuffer, words: 320×288, 2 bpp, 16 pixels per word (pixel x%16 in bits 2·(x%16)+1..2·(x%16)), 20 words per line |
+| `0x3100_0000` | write | Back framebuffer, single pixels: address + (((y << 9) \| x) << 2), data[1:0] = colour; the hardware merges it |
 
 The CPU runs while the engine is idle at a tick boundary, so voice and FX writes go straight into the engine and take effect at the tick's first sample (DECISIONS D4, D48). In hardware only voice word 31 (STATUS) and FX word 31 read back; other voice and FX words read 0. Any address outside the map sets a bus-error flag (shown on the test screen).
 
@@ -89,6 +92,7 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 | 14 | TICK_DONE | CPU → engine | write: this tick's composer work is done; the engine renders the tick's 48 samples, then increments TICK |
 | 15 | TICK_CYCLES | engine → CPU | CPU cycles used by the previous tick (diagnostic) |
 | 16–25 | ST_* | CPU → video/bridge | state, mode, elapsed s, seed, density, brightness, visuals, overlay, reverb, sleep |
+| 26–29 | DIAG_* | engine → CPU | worst CPU cycles per tick, lowest FIFO level, underruns, shortest/longest frame-tick gap (`[31:16]`/`[15:0]`) |
 
 ## Bridge (APF) addresses
 

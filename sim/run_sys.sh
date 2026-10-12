@@ -18,14 +18,16 @@ F=src/fpga/core
 mkdir -p sim/out
 verilator --cc --exe --build -j 0 -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal -Wno-lint \
   -Wno-style -Wno-TIMESCALEMOD --top-module cpu_sys --Mdir $OBJ -CFLAGS "-O2 -march=native" \
-  "$PWD/sim/tb/sim_sys.cpp" $F/cpu/cpu_sys.sv $F/cpu/picorv32.v $F/synth/audio_engine.sv \
+  "$PWD/sim/tb/sim_sys.cpp" $F/cpu/cpu_sys.sv $F/ui/fb_video.sv $F/cpu/picorv32.v $F/synth/audio_engine.sv \
   $F/synth/voice_engine.sv $F/synth/fx_engine.sv > sim/out/sys_build.log 2>&1 || { tail -20 sim/out/sys_build.log; exit 1; }
 PARGS=(); [ -n "${PRESS:-}" ] && PARGS=(--press "$PRESS")
 [ -n "${SET:-}" ] && PARGS+=(--set "$SET")
+#   FRAMES=2.5 sim/run_sys.sh ...                 also save the screen at those times (sim/out/<mode>_<ms>.ppm)
+FARGS=(); [ -n "${FRAMES:-}" ] && FARGS=(--frames "$FRAMES")
 for m in $MODES; do
   ( "$RENDER" --mode $m --seed $SEED --seconds "$SECS" "${PARGS[@]}" --out sim/out/sys_$m.ref.raw --quiet
     cd src/fpga && ../../$OBJ/Vcpu_sys --mode $m --seed $SEED --seconds "$SECS" "${PARGS[@]}" ${FAST:+--fast} \
-      --out ../../sim/out/sys_$m.raw > ../../sim/out/sys_$m.log 2>&1 ) &
+      "${FARGS[@]}" --frame-prefix ../../sim/out/$m --out ../../sim/out/sys_$m.raw > ../../sim/out/sys_$m.log 2>&1 ) &
 done
 wait
 fail=0

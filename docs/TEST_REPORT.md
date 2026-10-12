@@ -1,5 +1,15 @@
 # Test report
 
+## Phase 5: menu and screens, simulation (2026-10-12)
+
+| Check | Result |
+|---|---|
+| Firmware with the UI on the ISS (`rvsim --ui`): audio vs host render | **bit-identical** (the UI only reads composer state) |
+| ISS screens (`--frames`), all modes | match the D42 mockups (`build/frames`, see `docs/ui/`) |
+| `tb_fb_video`: 5,760 random words, 400 pixel writes, read-back, palette, swap at vsync, two full scanned frames vs a model, unrelated clocks | **pass** |
+| Full system in Verilator with the UI drawing (DRIFT, TIDES 3 s): audio vs render; scanned-out frames | **bit-identical**; frames match the ISS frames |
+| UI timing (ISS estimate): a full frame ~0.9 M cycles spread over ~12 ms, ~30 frames/s; composer's worst tick 231k cycles in RTL (incl. finishing the drawing primitive in progress) | FIFO lead needed ~64 frames of 512 |
+
 ## Phase 4: CPU integration, simulation (2026-10-12)
 
 Firmware: `make fw` (clang 18 / lld, RV32IMC `-Os`), 38.2 KB image. Hardware build v0.3.0 (`sys_test.sv`) not yet tested on the Pocket.

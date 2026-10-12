@@ -49,6 +49,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Tools
         run: sudo apt-get install -y verilator iverilog
+      - name: Framebuffer video unit test
+        run: |
+          iverilog -g2012 -o tb_fb_video.vvp sim/tb/tb_fb_video.sv src/fpga/core/ui/fb_video.sv
+          vvp -n tb_fb_video.vvp | tee tb_fb_video.log
+          grep -q "^PASS" tb_fb_video.log
       - name: Settings bridge unit test
         run: |
           iverilog -g2012 -o tb_settings.vvp sim/tb/tb_settings.sv src/fpga/core/settings_bridge.sv

@@ -7,6 +7,8 @@
 #include "cint.h"
 
 static comp_t C;
+
+const comp_t *composer_state(void) { return &C; }
 static const mode_ops_t *const MODES[MODE_COUNT] = {
     &MODE_DRIFT_OPS, &MODE_TIDES_OPS, &MODE_HUSH_OPS, &MODE_MOTHER_OPS };
 

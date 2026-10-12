@@ -15,7 +15,8 @@
 //
 // MMIO (fw/hal/regs.h): voice writes 0x1000_0000, voice STATUS reads (word 31; other voice
 // words read 0), FX writes 0x1000_1000 (word 31 reads the fade gain, others 0), control block
-// 0x1000_2000, visual events 0x1000_3000 (accepted and dropped until Phase 5). Any other
+// 0x1000_2000, visual events 0x1000_3000 (accepted and dropped), video control 0x1000_4000 and
+// the back framebuffer 0x3000_0000 (words) / 0x3100_0000 (pixels) (fb_video, D52). Any other
 // address sets bus_err.
 `default_nettype none
 
@@ -43,6 +44,13 @@ module cpu_sys #(
     input  wire        fw_we,
     input  wire [13:0] fw_addr,            // word address in the 64 KB RAM
     input  wire [31:0] fw_data,            // little-endian CPU word
+    // video (fb_video.sv; the CPU draws the screens, fw/ui)
+    input  wire        vclk,
+    input  wire        vsync,              // vclk pulse at the start of a frame
+    input  wire  [9:0] vx,                 // visible x / y three vclks ahead
+    input  wire  [9:0] vy,
+    output wire [23:0] rgb,
+    input  wire [31:0] diag_frame,         // CR_DIAG_FRAME: shortest / longest frame-tick gap
     // audio out
     input  wire        frame_tick,         // one pulse per 48 kHz frame
     output reg  [15:0] pcm_l,
@@ -141,6 +149,24 @@ module cpu_sys #(
         ram_q <= ram[ram_a];
     end
 
+    // ------------------------------------------------------------- framebuffers + palette
+    wire        fbw = mem_valid && !mem_ready && mem_addr_c[31:24] == 8'h30;   // word window
+    wire        fbp = mem_valid && !mem_ready && mem_addr_c[31:24] == 8'h31;   // pixel window
+    wire        vid = mem_valid && !mem_ready && mem_addr_c[31:8] == 24'h100040;
+    wire        fb_ok = fbw ? (mem_addr_c[23:15] == 9'd0 && mem_addr_c[14:2] < 13'd5760 && &mem_wstrb == |mem_wstrb)
+                            : (mem_addr_c[23:20] == 4'd0 && mem_addr_c[10:2] < 9'd320 && mem_addr_c[19:11] < 9'd288 && |mem_wstrb);
+    reg         fb_wait;
+    wire        fb_req = (fbw || fbp) && fb_ok && !fb_wait;
+    wire        fb_ready, swap_pending;
+    wire [31:0] fb_rdata;
+    wire [15:0] vsyncs;
+    fb_video u_vid (.clk(clk), .rst(rst),
+        .req(fb_req), .we(|mem_wstrb), .pixel(fbp), .word(mem_addr_c[14:2]), .px(mem_addr_c[10:2]),
+        .py(mem_addr_c[19:11]), .wdata(mem_wdata), .rdata(fb_rdata), .ready(fb_ready),
+        .pal_we(vid && |mem_wstrb && mem_addr_c[7:4] == 4'd0), .pal_idx(mem_addr_c[3:2]), .pal_data(mem_wdata[23:0]),
+        .swap(vid && |mem_wstrb && mem_addr_c[7:2] == 6'd4), .swap_pending(swap_pending), .vsyncs(vsyncs),
+        .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(rgb));
+
     // ------------------------------------------------------------- control block
     reg  [31:0] st_r [16:25];
     reg  [15:0] btn_pend, btn_evt;
@@ -174,6 +200,10 @@ module cpu_sys #(
             5'd12: ctrl_rd = tick[31:0];
             5'd13: ctrl_rd = tick[63:32];
             5'd15: ctrl_rd = tick_cycles;
+            5'd26: ctrl_rd = tick_cycles_max;
+            5'd27: ctrl_rd = {21'd0, fifo_min};
+            5'd28: ctrl_rd = {16'd0, underruns};
+            5'd29: ctrl_rd = diag_frame;
             5'd16, 5'd17, 5'd18, 5'd19, 5'd20, 5'd21, 5'd22, 5'd23, 5'd24, 5'd25: ctrl_rd = st_r[r];
             default: ctrl_rd = 32'd0;
         endcase
@@ -201,7 +231,7 @@ module cpu_sys #(
         if (rst) begin
             q <= Q_CPU; tick <= 64'd0; cyc <= 32'd0; tick_cycles <= 32'd0; tick_cycles_max <= 32'd0;
             btn_pend <= 16'd0; btn_evt <= 16'd0; cmd_pend <= 1'b0; cmd_evt <= 1'b0;
-            bwait <= 2'd0; bus_err <= 1'b0;
+            bwait <= 2'd0; bus_err <= 1'b0; fb_wait <= 1'b0;
         end else begin
             btn_pend <= btn_pend | btn_edge;
             cmd_pend <= cmd_pend | cmd_reseed;
@@ -210,7 +240,13 @@ module cpu_sys #(
             // RAM: registered read, ready (with ram_q) in the next cycle
             if (mem_valid && !mem_ready && sel_ram) begin mem_ready <= 1'b1; ram_rd <= 1'b1; end
 
-            if (io) begin
+            if (fb_req) fb_wait <= 1'b1;
+            if (fb_ready) begin mem_ready <= 1'b1; mem_rdata <= fb_rdata; fb_wait <= 1'b0; end
+            if ((fbw || fbp) && !fb_ok) begin bus_err <= 1'b1; mem_rdata <= 32'd0; mem_ready <= 1'b1; end
+            if (vid) begin                                     // video control (VC_*)
+                mem_ready <= 1'b1;
+                mem_rdata <= mem_addr_c[7:2] == 6'd5 ? {vsyncs, 15'd0, swap_pending} : 32'd0;
+            end else if (io) begin
                 if (!io_ok) begin
                     bus_err <= 1'b1; mem_rdata <= 32'd0; mem_ready <= 1'b1;
                 end else if (io_wr) begin
@@ -254,7 +290,7 @@ module cpu_sys #(
                         default: begin mem_ready <= 1'b1; mem_rdata <= 32'd0; end
                     endcase
                 end
-            end else if (mem_valid && !mem_ready && !sel_ram) begin
+            end else if (mem_valid && !mem_ready && !sel_ram && !fbw && !fbp) begin
                 bus_err <= 1'b1; mem_rdata <= 32'd0; mem_ready <= 1'b1;
             end
 

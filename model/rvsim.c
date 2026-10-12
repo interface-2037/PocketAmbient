@@ -10,6 +10,8 @@
  *   --reverb --sleep --seconds/--minutes --press SEC:BTN[,...] --no-autostart
  *   --set SEC:NAME=VAL[,...] (menu changes, model/setscript.h)   --out FILE (raw s16le stereo)   --quiet
  *   --profile N (PC histogram of tick N on stderr)   --eng-cycles N (FIFO estimate, default 700)
+ *   --ui (run the screen code with a real-time model)   --frames SEC[,SEC...] (implies --ui: dump
+ *   the frame on screen at those times to <prefix>_<ms>.ppm)   --frame-prefix PATH
  * Prints instructions per tick (max / mean), an estimate of PicoRV32 cycles and the
  * deepest stack use.
  *
@@ -35,6 +37,53 @@ static FILE    *out;
 static uint32_t min_sp = RAM_BYTES, top_sp;
 static int64_t  prof_tick = -1;               /* --profile N: PC histogram of tick N */
 static uint32_t prof[RAM_BYTES / 2];
+
+/* --ui: the CPU also draws the screen while the engine renders (fw/ui). Time model: a tick's
+ * samples take ENG_CYC clocks after CR_TICK_DONE, the engine may run at most FIFO_LEAD clocks
+ * ahead of real time, and vsync comes every VSYNC_CYC clocks (60 Hz at 74.25 MHz). */
+#define ENG_CYC   (48u * 650u)
+#define FIFO_LEAD (1024ull * 1547ull)
+#define TICK_CYC  74250ull
+#define VSYNC_CYC 1237500ull
+static int      ui_mode, done_pending;
+static uint64_t cyc_total, done_at, next_vsync = VSYNC_CYC, vsyncs;
+static uint32_t fbm[2][AP_FB_WPL * AP_FB_H], pal[2][4];
+static int      front, swap_req;
+static uint64_t frame_t[64];
+static int      nframe, fi_next;
+static const char *frame_prefix = "frame";
+static uint64_t ui_draw_start, ui_draw_max, ui_draws;
+
+static void dump_frame(uint64_t t)
+{
+    char path[512];
+    snprintf(path, sizeof path, "%s_%06llu.ppm", frame_prefix, (unsigned long long)t);
+    FILE *f = fopen(path, "wb");
+    if (!f) { perror(path); exit(2); }
+    fprintf(f, "P6\n%u %u\n255\n", AP_FB_W, AP_FB_H);
+    for (unsigned y = 0; y < AP_FB_H; y++)
+        for (unsigned x = 0; x < AP_FB_W; x++) {
+            unsigned c = (fbm[front][y * AP_FB_WPL + x / 16u] >> (2u * (x % 16u))) & 3u;
+            uint32_t rgb = pal[front][c];
+            fputc((int)(rgb >> 16) & 255, f);
+            fputc((int)(rgb >> 8) & 255, f);
+            fputc((int)rgb & 255, f);
+        }
+    fclose(f);
+}
+
+static void video_time(void)
+{
+    while (cyc_total >= next_vsync) {
+        next_vsync += VSYNC_CYC;
+        vsyncs++;
+        if (swap_req) {
+            front ^= 1;                  /* the old front is the new back, stale as in hardware */
+            swap_req = 0;
+        }
+        while (fi_next < nframe && frame_t[fi_next] <= tick) dump_frame(frame_t[fi_next++]);
+    }
+}
 
 /* per-tick statistics: instructions and an estimated PicoRV32 cycle count */
 static uint64_t ins_tick, cyc_tick, ins_max, cyc_max, ins_sum, cyc_sum, max_tick_at;
@@ -127,6 +176,12 @@ static uint32_t mmio_read(uint32_t a)
         if (r == CR_BTN_EVENTS || r == CR_CMD) ctrl[r] = 0;
         return v;
     }
+    if (a >= AP_MMIO_VIDEO && a < AP_MMIO_VIDEO + 0x100u) {
+        uint32_t r = (a - AP_MMIO_VIDEO) >> 2;
+        if (r == VC_STATUS) return (uint32_t)swap_req | (uint32_t)(vsyncs << 16);
+        return r < 4 ? pal[front ^ 1][r] : 0;
+    }
+    if (a >= AP_FB_WORDS && a < AP_FB_WORDS + AP_FB_WPL * AP_FB_H * 4u) return fbm[front ^ 1][(a - AP_FB_WORDS) >> 2];
     fail("read from unmapped address", a);
     return 0;
 }
@@ -141,8 +196,32 @@ static void mmio_write(uint32_t a, uint32_t v)
         sm_fxwrite(&g_sm, (a - AP_MMIO_FX) >> 2, v);
     } else if (a >= AP_MMIO_CTRL && a < AP_MMIO_CTRL + 0x100u) {
         uint32_t r = (a - AP_MMIO_CTRL) >> 2;
-        if (r == CR_TICK_DONE) end_tick();
+        if (r == CR_TICK_DONE) {
+            if (ui_mode) { done_pending = 1; done_at = cyc_total; }
+            else end_tick();
+        }
         else if (r >= CR_ST_STATE && r < CR_NUM_REGS) ctrl[r] = v;
+    } else if (a >= AP_MMIO_VIDEO && a < AP_MMIO_VIDEO + 0x100u) {
+        uint32_t r = (a - AP_MMIO_VIDEO) >> 2;
+        if (r < 4) pal[front ^ 1][r] = v & 0xFFFFFFu;
+        else if (r == VC_SWAP) {
+            swap_req = 1;
+            if (ui_draw_start) {
+                uint64_t d = cyc_total - ui_draw_start;
+                if (d > ui_draw_max) ui_draw_max = d;
+                ui_draws++;
+                ui_draw_start = 0;
+            }
+        }
+    } else if (a >= AP_FB_WORDS && a < AP_FB_WORDS + AP_FB_WPL * AP_FB_H * 4u) {
+        if (!ui_draw_start) ui_draw_start = cyc_total;
+        fbm[front ^ 1][(a - AP_FB_WORDS) >> 2] = v;
+    } else if (a >= AP_FB_PIXEL && a < AP_FB_PIXEL + (1u << 20)) {
+        uint32_t x = (a >> 2) & 511u, y = (a >> 11) & 511u;
+        if (x >= AP_FB_W || y >= AP_FB_H) fail("pixel write off screen", a);
+        uint32_t *w = &fbm[front ^ 1][y * AP_FB_WPL + x / 16u];
+        unsigned sh = 2u * (x % 16u);
+        *w = (*w & ~(3u << sh)) | ((v & 3u) << sh);
     } else if (a != AP_MMIO_VISUAL) {
         fail("write to unmapped address", a);
     }
@@ -357,8 +436,18 @@ static void step(void)
     if (x[2] && x[2] < min_sp) min_sp = x[2];
     if ((int64_t)tick == prof_tick && pc < RAM_BYTES) prof[pc >> 1]++;
     pc = npc;
-    ins_tick++;
-    cyc_tick += cyc;
+    cyc_total += cyc;
+    if (!done_pending) {                          /* per-tick stats: composer work only */
+        ins_tick++;
+        cyc_tick += cyc;
+    }
+    if (ui_mode) {
+        video_time();
+        if (done_pending && cyc_total >= done_at + ENG_CYC && cyc_total + FIFO_LEAD >= (tick + 1) * TICK_CYC) {
+            done_pending = 0;
+            end_tick();
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ main */
@@ -400,6 +489,16 @@ int main(int argc, char **argv)
         }
         else if (ARG("--set")) nset = setscript_parse(v, sets, nset, 4096);
         else if (ARG("--profile")) prof_tick = atoll(v);
+        else if (ARG("--frames")) {
+            char *t2 = malloc(strlen(v) + 1);
+            strcpy(t2, v);
+            for (char *q = strtok(t2, ","); q && nframe < 64; q = strtok(NULL, ","))
+                frame_t[nframe++] = (uint64_t)(atof(q) * 1000.0 + 0.5);
+            free(t2);
+            ui_mode = 1;
+        }
+        else if (ARG("--frame-prefix")) frame_prefix = v;
+        else if (!strcmp(o, "--ui")) ui_mode = 1;
         else if (ARG("--eng-cycles")) eng_cycles = strtoull(v, NULL, 0);
         else if (!strcmp(o, "--no-autostart")) autostart = 0;
         else if (!strcmp(o, "--quiet")) quiet = 1;
@@ -446,6 +545,9 @@ int main(int argc, char **argv)
     if (prof_tick >= 0)
         for (uint32_t k = 0; k < RAM_BYTES / 2; k++)
             if (prof[k]) fprintf(stderr, "prof %08x %u\n", k * 2, prof[k]);
+    if (!quiet && ui_mode)
+        printf("rvsim: UI frames drawn %llu, longest draw %llu est. cycles (%.1f ms)\n",
+               (unsigned long long)ui_draws, (unsigned long long)ui_draw_max, ui_draw_max / 74250.0);
     if (!quiet)
         printf("rvsim: FIFO lead needed (engine %llu cycles/sample): %.0f clocks = %.1f frames\n",
                (unsigned long long)eng_cycles, max_lag, max_lag / 1546.875);

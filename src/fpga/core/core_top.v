@@ -295,7 +295,7 @@ assign dram_ras_n = 'h1;
 assign dram_cas_n = 'h1;
 assign dram_we_n = 'h1;
 
-// SRAM: driven by the Phase 4 system test (sys_test below)
+// SRAM: the reverb / echo memory (ap_top below)
 
 assign dbg_tx = 1'bZ;
 assign user1 = 1'bZ;
@@ -537,34 +537,13 @@ assign video_hs = vidout_hs;
     reg         vidout_vs;
     reg         vidout_hs, vidout_hs_1;
     
-    // Phase 3 test screen: 20 x 18 text cells; coordinates 3 pixels ahead (layer latency)
+    // the composer CPU draws the screens into fb_video (ap_top); coordinates 3 pixels ahead
     wire [9:0]  look_x = x_count + 10'd3 - VID_H_BPORCH;
     wire [9:0]  look_y = y_count - VID_V_BPORCH;
-    wire        text_px;
-    wire [1:0]  text_col;
-    wire        txt_we;
-    wire [9:0]  txt_addr;
-    wire [7:0]  txt_data;
-    text_layer screen (
-        .vclk   ( clk_core_12288 ),
-        .vx     ( look_x ),
-        .vy     ( look_y ),
-        .pix    ( text_px ),
-        .colour ( text_col ),
-        .wclk   ( clk_74a ),
-        .we     ( txt_we ),
-        .waddr  ( txt_addr ),
-        .wdata  ( txt_data )
-    );
-    reg  [23:0] text_rgb;
-    always @(*) begin
-        case (text_col)
-            2'd0:    text_rgb = 24'h6C8094;      // dim blue-grey
-            2'd1:    text_rgb = 24'hE0C070;      // amber
-            2'd2:    text_rgb = 24'h70E090;      // green
-            default: text_rgb = 24'hF06050;      // red
-        endcase
-    end
+    wire [23:0] fb_rgb;
+    wire        ap_fault;
+    reg         fault_v1, fault_v2;
+    always @(posedge clk_core_12288) begin fault_v1 <= ap_fault; fault_v2 <= fault_v1; end
 
 always @(posedge clk_core_12288 or negedge reset_n) begin
 
@@ -616,8 +595,8 @@ always @(posedge clk_core_12288 or negedge reset_n) begin
             if(y_count >= VID_V_BPORCH && y_count < VID_V_ACTIVE+VID_V_BPORCH) begin
                 // data enable. this is the active region of the line
                 vidout_de <= 1;
-                // deep blue-black background, pale amber title text (2x scaled 8x8 glyphs)
-                vidout_rgb <= text_px ? text_rgb : 24'h08101A;
+                // the composer's screen; solid red if the CPU has trapped (firmware fault)
+                vidout_rgb <= fault_v2 ? 24'hC00000 : fb_rgb;
             end
         end
     end
@@ -655,7 +634,7 @@ always @(posedge audgen_mclk) begin
     aud_mclk_divider <= aud_mclk_divider + 1'b1;
 end
 
-// Phase 4: the composer firmware on the PicoRV32 drives the audio engine (sys_test / cpu_sys).
+// The composer firmware on the PicoRV32 drives the audio engine (ap_top / cpu_sys).
 // The frame tick is the LRCK edge that starts the left channel, brought into clk_74a; each
 // tick pops one frame from the audio FIFO into pcm_l / pcm_r, which then stay stable until
 // the I2S side loads them at the next frame start.
@@ -665,7 +644,7 @@ end
     wire    [15:0]  pcm_l, pcm_r;
     reg     [15:0]  pcm_r_hold;
 
-sys_test et (
+ap_top ap (
     .clk        ( clk_74a ),
     .reset_n    ( reset_n ),
     .bridge_wr  ( bridge_wr ),
@@ -678,9 +657,12 @@ sys_test et (
     .tick       ( frame_tick ),
     .pcm_l      ( pcm_l ),
     .pcm_r      ( pcm_r ),
-    .txt_we     ( txt_we ),
-    .txt_addr   ( txt_addr ),
-    .txt_data   ( txt_data ),
+    .vclk       ( clk_core_12288 ),
+    .vsync      ( x_count == 10'd0 && y_count == 10'd0 ),
+    .vx         ( look_x ),
+    .vy         ( look_y ),
+    .rgb        ( fb_rgb ),
+    .fault      ( ap_fault ),
     .sram_a     ( sram_a ),
     .sram_dq    ( sram_dq ),
     .sram_oe_n  ( sram_oe_n ),

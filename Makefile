@@ -19,7 +19,7 @@ COMPOSER := fw/composer/composer.c fw/composer/fxp.c fw/composer/prng.c fw/compo
             fw/composer/voices.c fw/composer/harmony.c fw/composer/mode_drift.c \
             fw/composer/mode_tides.c fw/composer/mode_hush.c fw/composer/mode_mother.c
 MODEL    := model/synth_model.c fw/hal/hal_model.c
-HEADERS  := $(wildcard fw/composer/*.h fw/hal/*.h model/*.h)
+HEADERS  := $(wildcard fw/composer/*.h fw/hal/*.h fw/ui/*.h model/*.h)
 
 RENDER := $(BUILD)/render$(EXE)
 TESTS  := $(BUILD)/tests$(EXE)
@@ -76,7 +76,8 @@ RV_OBJCOPY ?= llvm-objcopy
 RV_CFLAGS := --target=riscv32-unknown-elf -march=rv32imc -mabi=ilp32 -Os -ffreestanding -fno-builtin \
              -fno-common -ffunction-sections -std=c11 -Wall -Wextra -Wno-unused-const-variable \
              -Wno-unused-function
-FW_SRCS   := fw/rv/crt0.S fw/rv/main.c fw/rv/rt.c fw/hal/hal_mmio.c $(COMPOSER)
+FW_SRCS   := fw/rv/crt0.S fw/rv/coro.S fw/rv/main.c fw/rv/rt.c fw/hal/hal_mmio.c fw/ui/ui.c fw/ui/fb.c fw/ui/font5x7.c \
+             $(COMPOSER)
 FW_OBJS   := $(patsubst %,$(BUILD)/fw/%.o,$(FW_SRCS))
 FW_ELF    := $(BUILD)/fw/composer.elf
 FW_HEX    := src/fpga/core/cpu/composer.hex

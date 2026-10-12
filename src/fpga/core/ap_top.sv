@@ -1,14 +1,12 @@
-// sys_test.sv - Phase 4/5 hardware test (v0.3.x), all in clk_74a: the real composer firmware on
-// the PicoRV32 drives the audio engine (cpu_sys), with the Pocket's buttons wired to the
-// composer, the core menu (settings_bridge, pkg/interact.json) and a diagnostics screen.
+// ap_top.sv - the Ambient Pocket core below core_top (v0.4.x), all in clk_74a except video:
+// the composer firmware on the PicoRV32 drives the audio engine (cpu_sys) and draws the
+// screens into fb_video; the Pocket's buttons go to the composer, the core menu to
+// settings_bridge (pkg/interact.json), and dev builds load the firmware from the SD card.
 // Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
-//
-// Screen: mode / state from the composer, uptime, worst CPU cycles per tick, lowest FIFO
-// level, FIFO underruns, shortest / longest gap between I2S frame ticks (clk_74a cycles;
-// nominal 1546-1547, this is the Phase 3 overrun diagnostic), and CPU trap / bus error.
+// `fault` (CPU trap or bus error) makes core_top show a red screen.
 `default_nettype none
 
-module sys_test #(
+module ap_top #(
     parameter FW_HEX = "core/cpu/composer.hex"
 ) (
     input  wire        clk,
@@ -24,10 +22,13 @@ module sys_test #(
     input  wire        tick,               // 48 kHz frame tick (start of a stereo frame)
     output wire [15:0] pcm_l,
     output wire [15:0] pcm_r,
-    // text layer character RAM
-    output reg         txt_we,
-    output reg   [9:0] txt_addr,
-    output reg   [7:0] txt_data,
+    // video (pixel clock): coordinates three clocks ahead, colour three clocks later
+    input  wire        vclk,
+    input  wire        vsync,
+    input  wire  [9:0] vx,
+    input  wire  [9:0] vy,
+    output wire [23:0] rgb,
+    output wire        fault,
     // SRAM pins
     output wire [16:0] sram_a,
     inout  wire [15:0] sram_dq,
@@ -82,6 +83,7 @@ module sys_test #(
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
         .settings_seq(settings_seq), .cmd_reseed(cmd_reseed));
+    reg  [15:0] gap, gap_min, gap_max;
     wire [63:0] tick_n;
     wire [15:0] underruns;
     wire [10:0] fifo_min, fifo_level;
@@ -91,6 +93,7 @@ module sys_test #(
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
         .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .rtc_epoch(rtc_epoch), .btn_edge(btn_edge),
         .fw_we(fw_we), .fw_addr(fw_addr), .fw_data(fw_data),
+        .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(rgb), .diag_frame({gap_min, gap_max}),
         .frame_tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
         .mem_req(m_req), .mem_we(m_we), .mem_addr(m_addr), .mem_wd(m_wd), .mem_ack(m_ack), .mem_rd(m_rd),
         .st_state(st_state), .st_mode(st_mode), .st_elapsed(), .st_seed(st_seed), .st_density(st_density),
@@ -100,8 +103,11 @@ module sys_test #(
         .fifo_min(fifo_min), .fifo_level(fifo_level), .primed(primed), .bus_err(bus_err), .trap(trap),
         .smp_valid(), .smp_l(), .smp_r());
 
+    assign fault = trap || bus_err;
+
     // ------------------------------------------------------------- frame tick spacing
-    reg [15:0] gap, gap_min, gap_max;
+    // shortest / longest gap between I2S frame ticks in clk_74a cycles (nominal 1546-1547),
+    // shown in the Y overlay: the Phase 3 overrun diagnostic (TEST_REPORT)
     reg  [1:0] seen;
     always @(posedge clk) begin
         if (rst) begin
@@ -115,98 +121,5 @@ module sys_test #(
         end else if (gap != 16'hFFFF) gap <= gap + 16'd1;
     end
 
-    // ------------------------------------------------------------- uptime mm:ss (1000 ticks = 1 s)
-    reg  [9:0] ms;
-    reg        t0_d;
-    reg  [3:0] s0, s1, m0, m1;
-    always @(posedge clk) begin
-        t0_d <= tick_n[0];
-        if (rst) begin ms <= 10'd0; s0 <= 0; s1 <= 0; m0 <= 0; m1 <= 0; end
-        else if (tick_n[0] != t0_d) begin
-            if (ms != 10'd999) ms <= ms + 10'd1;
-            else begin
-                ms <= 10'd0;
-                if (s0 != 4'd9) s0 <= s0 + 4'd1;
-                else begin
-                    s0 <= 4'd0;
-                    if (s1 != 4'd5) s1 <= s1 + 4'd1;
-                    else begin
-                        s1 <= 4'd0;
-                        if (m0 != 4'd9) m0 <= m0 + 4'd1; else begin m0 <= 4'd0; m1 <= m1 + 4'd1; end
-                    end
-                end
-            end
-        end
-    end
-
-    // ------------------------------------------------------------- screen fields
-    // character codes are ASCII - 32; colours: 0 dim, 1 amber, 2 green, 3 red
-    function automatic [5:0] hexc(input [3:0] d);
-        hexc = (d < 4'd10) ? 6'd16 + {2'd0, d} : 6'd33 + {2'd0, d} - 6'd10;
-    endfunction
-    function automatic [5:0] asc(input [7:0] c); asc = c[5:0] - 6'd32; endfunction
-    function automatic [7:0] mode_ch(input [1:0] s, input [2:0] i);
-        reg [47:0] n;
-        begin
-            case (s)
-                2'd0: n = "DRIFT ";
-                2'd1: n = "TIDES ";
-                2'd2: n = "HUSH  ";
-                default: n = "MOTHER";
-            endcase
-            mode_ch = n[8 * (5 - i) +: 8];
-        end
-    endfunction
-    function automatic [7:0] state_ch(input [1:0] s, input [2:0] i);
-        reg [47:0] n;
-        begin
-            case (s)
-                2'd0: n = "READY ";
-                2'd1: n = "PLAY  ";
-                2'd2: n = "FADE  ";
-                default: n = "?     ";
-            endcase
-            state_ch = n[8 * (5 - i) +: 8];
-        end
-    endfunction
-    function automatic [7:0] err_ch(input t, input b, input p, input [2:0] i);
-        reg [47:0] n;
-        begin
-            n = t ? "TRAP  " : b ? "BUS   " : p ? "OK    " : "START ";
-            err_ch = n[8 * (5 - i) +: 8];
-        end
-    endfunction
-    function automatic [3:0] nib(input [19:0] v, input [2:0] k);   // k = 0: most significant of 5
-        nib = v[4 * (4 - k) +: 4];
-    endfunction
-
-    // 6 cells per row slot, value column 11, rows 4..13
-    reg [6:0] fi = 7'd0;
-    wire [2:0] c = fi[2:0];
-    wire [3:0] rw = fi[6:3];
-    always @(posedge clk) begin
-        fi <= (fi == 7'd79) ? 7'd0 : fi + 7'd1;
-        txt_we <= c < 3'd6;
-        txt_addr <= {5'd4 + {1'b0, rw}, 5'd11 + {2'd0, c}};
-        case (rw)
-            4'd0: txt_data <= {2'd2, asc(mode_ch(st_mode[1:0], c))};
-            4'd1: txt_data <= {st_state[1:0] == 2'd1 ? 2'd2 : 2'd1, asc(state_ch(st_state[1:0], c))};
-            4'd2: case (c)                                                    // uptime mm:ss
-                3'd0: txt_data <= {2'd0, hexc(m1)};
-                3'd1: txt_data <= {2'd0, hexc(m0)};
-                3'd2: txt_data <= {2'd0, asc(":")};
-                3'd3: txt_data <= {2'd0, hexc(s1)};
-                3'd4: txt_data <= {2'd0, hexc(s0)};
-                default: txt_data <= {2'd0, asc(" ")};
-            endcase
-            4'd4: txt_data <= {2'd1, c < 3'd5 ? hexc(nib(tick_cyc_max[19:0], c)) : asc(" ")};
-            4'd5: txt_data <= {2'd1, c < 3'd5 ? hexc(nib({9'd0, fifo_min}, c)) : asc(" ")};
-            4'd6: txt_data <= {underruns != 16'd0 ? 2'd3 : 2'd1, c < 3'd5 ? hexc(nib({4'd0, underruns}, c)) : asc(" ")};
-            4'd7: txt_data <= {2'd1, c < 3'd5 ? hexc(nib({4'd0, gap_min}, c)) : asc(" ")};
-            4'd8: txt_data <= {2'd1, c < 3'd5 ? hexc(nib({4'd0, gap_max}, c)) : asc(" ")};
-            4'd9: txt_data <= {(trap || bus_err) ? 2'd3 : 2'd2, asc(err_ch(trap, bus_err, primed, c))};
-            default: txt_we <= 1'b0;
-        endcase
-    end
 endmodule
 `default_nettype wire
