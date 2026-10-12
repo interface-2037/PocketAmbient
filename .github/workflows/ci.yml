@@ -23,7 +23,7 @@ jobs:
         run: make test
       - name: Firmware (RV32IMC) on the instruction-set simulator == host render
         run: |
-          sudo apt-get install -y lld
+          sudo apt-get install -y lld llvm
           make build/render build/rvsim
           make fw PYTHON=python
           tools/check_fw.sh 10 build/fw/composer.bin
