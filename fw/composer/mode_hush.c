@@ -2,14 +2,13 @@
  * mode_hush.c - HUSH: a lo-fi beat. Swung boom-bap drums (pitch-enveloped sine
  * kick, band-passed noise snare and hats), jazzy 7th/9th chords on a soft FM
  * electric piano with tape wow, a sine bass with approach notes, a sparse plucked
- * pentatonic lead, and sparse vinyl crackle underneath. Arranged in sections:
+ * pentatonic lead. Arranged in sections:
  * intro -> grooves -> occasional breakdowns; key and tempo change at breakdowns.
  */
 #include "cint.h"
 
 #define H (c->m.h)
 #define H_BUDGET   22
-#define H_BED_MAX  MIN(40)           /* beds re-articulate at every key change (<= 25 min) */
 #define TRIM       20450             /* loudness calibration to -20 LUFS */
 
 enum { S_INTRO, S_GROOVE, S_BREAK };
@@ -82,30 +81,9 @@ static void hit(comp_t *c, uint64_t bar_us, int step, int inst, int pitch, int v
                ((uint32_t)inst << 24) | ((uint32_t)(pitch & 0xFF) << 8) | (uint32_t)vel, dur);
 }
 
-/* ---------------------------------------------------------------------- beds */
+/* ---------------------------------------------------------------------- voices */
 
 static int live(comp_t *c, int v) { return v >= 0 && g_vinfo[v].owner == c->gen && g_vinfo[v].gated; }
-
-static void bed(comp_t *c, int *slot, vparams_t *p, uint32_t attack_ms)
-{
-    int v = role_alloc(slot, c->gen, 0, AP_KS_FIRST - 1, H_BUDGET);
-    if (v < 0) return;
-    p->attack = env_attack_ms(attack_ms);
-    p->decay = env_decay_ms(1000);
-    p->sustain = 32768;
-    p->release = env_release_ms(6000);
-    voice_setup(v, p);
-    voice_on(v, c->gen, 0, H_BED_MAX, c->now);
-}
-
-static void beds_start(comp_t *c, uint32_t attack_ms)
-{
-    vparams_t q = {0};                                  /* vinyl crackle: sparse pops */
-    q.algo = ALGO_NOISE; q.noise = NOISE_PDUST; q.fmode = FMODE_LP;
-    q.cutoff = svf_coef_hz(2600); q.reso = 12000; q.dust_rate = 5;   /* ~4 pops/s */
-    q.amp = 4500; q.pan = 16384; q.send_rev = 1500;
-    bed(c, &H.crackle_v, &q, attack_ms);
-}
 
 /* ------------------------------------------------------------------ bar logic */
 
@@ -121,7 +99,6 @@ static void next_section(comp_t *c)
             H.bpm = (uint32_t)clampi((int32_t)H.bpm + prng_range(&c->r_form, -6, 6), 70, 88);
             H.voiced_deg = -1;
             gen_prog(c);
-            beds_start(c, 6000);
         }
     } else {
         H.section = S_GROOVE;
@@ -417,12 +394,11 @@ static void hush_start(comp_t *c)
     H.pending_key = 0;
     H.lead_idx = 6;
     H.voiced_deg = -1;
-    H.bass_v = H.rain_v = H.crackle_v = -1;
+    H.bass_v = -1;
     for (int i = 0; i < 4; i++) H.keys_v[i] = -1;
     H.wow_inc = 0xFFFFFFFFu / (uint32_t)prng_range(&c->r_timbre, 3000, 5500);
     H.wow_ph = prng_next(&c->r_timbre);
     gen_prog(c);
-    beds_start(c, 4000);
     sched_push(&c->sched, H.t0, EV_H_BAR, 120, c->gen, 0, 0);
 }
 

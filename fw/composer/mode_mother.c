@@ -85,10 +85,10 @@ static void flow_start(comp_t *c, int i)
     if (role(c, &O.flow_v[i]) < 0) return;
     vparams_t p = {0};
     p.algo = ALGO_NOISE; p.noise = NOISE_PINK; p.fmode = FMODE_LP;    /* resonant LP: no HF spill */
-    p.cutoff = svf_coef_hz(i ? 800 : 260); p.reso = 9000;
+    p.cutoff = svf_coef_hz(i ? 180 : 90); p.reso = 9000;      /* low hum, not wind */
     p.attack = env_attack_ms(6000); p.decay = env_decay_ms(1000); p.sustain = 32768;
     p.release = env_release_ms(6000);
-    p.amp = i ? 6000 : 4500; p.pan = (uint32_t)(i ? 19500 : 13500);
+    p.amp = i ? 2500 : 3000; p.pan = (uint32_t)(i ? 19500 : 13500);
     p.send_rev = 9000;
     p.slew = slew_code(3000);
     voice_setup(O.flow_v[i], &p);
@@ -105,10 +105,10 @@ static void flow_tick(comp_t *c, int i)
     unsigned v = (unsigned)O.flow_v[i];
     uint32_t slew = (uint32_t)prng_range(&c->r_rhythm, 2000, 6000);
     hal_vwrite(v, VR_SLEW, slew_code(slew));
-    hal_vwrite(v, VR_CUTOFF, svf_coef_hz((uint32_t)(i ? prng_range(&c->r_timbre, 900, 2600)
-                                                      : prng_range(&c->r_timbre, 200, 800))));
-    hal_vwrite(v, VR_RESO, (uint32_t)prng_range(&c->r_timbre, 4500, 14000));
-    int32_t amp = i ? prng_range(&c->r_timbre, 4500, 9000) : prng_range(&c->r_timbre, 2400, 5000);
+    hal_vwrite(v, VR_CUTOFF, svf_coef_hz((uint32_t)(i ? prng_range(&c->r_timbre, 140, 260)
+                                                      : prng_range(&c->r_timbre, 70, 140))));
+    hal_vwrite(v, VR_RESO, (uint32_t)prng_range(&c->r_timbre, 9000, 14000));   /* no sharp whistle */
+    int32_t amp = i ? prng_range(&c->r_timbre, 1500, 3000) : prng_range(&c->r_timbre, 2000, 3500);
     hal_vwrite(v, VR_AMP, (uint32_t)mod_q15(amp, O.activity - AQ(0.5), 9000));
     O.flow_next[i] = (int32_t)slew + prng_range(&c->r_rhythm, 0, 2500);
 }

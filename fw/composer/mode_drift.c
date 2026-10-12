@@ -134,7 +134,8 @@ static void string_voice(comp_t *c, int *slot, int32_t pitch, uint32_t attack_ms
 
 static void bow_noise(comp_t *c, int on)
 {
-    if (!on) { if (gated(c, D.bow_v)) voice_off(D.bow_v); return; }
+    if (gated(c, D.bow_v)) voice_off(D.bow_v);                /* bow hiss removed (music pass) */
+    if (!on || 1) return;
     if (gated(c, D.bow_v)) return;
     if (role(c, &D.bow_v) < 0) return;
     vparams_t p = {0};                                       /* airy sul ponticello edge */
@@ -261,7 +262,7 @@ static void motif_note(comp_t *c, int first)
     voice_off(v);
     voice_on(v, c->gen, D.horn_p * 100, SEC(20), c->now);
     hal_visual_event(VIS_NOTE((uint32_t)D.horn_p, 16384));
-    if (D.flute) {                                           /* breath noise around the note */
+    if (0 && D.flute) {                                      /* breath noise removed (music pass) */
         if (role(c, &D.breath_v) >= 0) {
             vparams_t b = {0};
             b.algo = ALGO_NOISE; b.noise = NOISE_PINK; b.fmode = FMODE_LP;

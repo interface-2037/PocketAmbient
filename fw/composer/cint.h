@@ -110,7 +110,6 @@ typedef struct {
     int32_t  keys_p[4];             /* keys voicing, semitones */
     int      keys_v[4];
     int      bass_v;
-    int      rain_v, crackle_v;
     uint32_t wow_ph, wow_inc;
 } hush_t;
 
