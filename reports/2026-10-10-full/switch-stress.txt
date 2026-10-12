@@ -1,0 +1,25 @@
+== switch-stress  (30.0 min)
+   duration_s                   1800.00
+   sample_peak_dbfs             -4.47
+   fullscale_samples            0
+   true_peak_dbtp               -4.46
+   integrated_lufs              -21.14
+   mono_lufs                    -21.51
+   mono_delta_lu                -0.37
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -86.49
+   clicks                       0
+   hf_rel_db                    -74.38
+   lf_rel_db                    -55.14
+   steal_max_db                 -inf
+   notes                        3418
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 46
+   pitch_class_entropy_bits     3.57
+   repeated_30s_windows         0
+   intentional_marks            6
+   chroma_stripes               0
+   RESULT: PASS

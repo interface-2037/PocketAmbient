@@ -1,0 +1,30 @@
+{
+  "switch-stress": {
+    "duration_s": 1800.0,
+    "sample_peak_dbfs": -4.465650083508499,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -4.460122708477429,
+    "integrated_lufs": -21.137542014053725,
+    "mono_lufs": -21.508565430701733,
+    "mono_delta_lu": -0.37102341664800775,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -86.49284349655632,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -74.38284659449566,
+    "lf_rel_db": -55.14057193106137,
+    "steal_max_db": -Infinity,
+    "notes": 3418,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 46,
+    "pitch_class_entropy_bits": 3.5660244399733427,
+    "repeated_30s_windows": 0,
+    "intentional_marks": 6,
+    "chroma_stripes": 0,
+    "fails": []
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "mother-d5b1": {
+    "duration_s": 3600.0,
+    "sample_peak_dbfs": -7.937091394719119,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -7.904989669100758,
+    "integrated_lufs": -20.49723105123464,
+    "mono_lufs": -20.564347317073736,
+    "mono_delta_lu": -0.06711626583909691,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -95.25247825136253,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -53.9194546116873,
+    "lf_rel_db": -59.82697645295458,
+    "steal_max_db": -61.522344822589105,
+    "notes": 16725,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 4,
+    "pitch_class_entropy_bits": 1.2794398410929473,
+    "repeated_30s_windows": 0,
+    "intentional_marks": 0,
+    "chroma_stripes": 0,
+    "fails": []
+  }
+}

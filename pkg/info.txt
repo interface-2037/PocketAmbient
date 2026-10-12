@@ -1,0 +1,5 @@
+Ambient Pocket
+
+Generative ambient music, indefinitely: DRIFT, TIDES, HUSH and MOTHER.
+Phase 0 build: 440 Hz test tone and title screen.
+Based on the openFPGA core template (https://github.com/open-fpga/core-template).

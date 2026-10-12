@@ -1,0 +1,25 @@
+== tides-d1b5  (60.0 min)
+   duration_s                   3600.00
+   sample_peak_dbfs             -6.37
+   fullscale_samples            0
+   true_peak_dbtp               -6.37
+   integrated_lufs              -20.06
+   mono_lufs                    -22.77
+   mono_delta_lu                -2.72
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -88.39
+   clicks                       0
+   hf_rel_db                    -78.47
+   lf_rel_db                    -62.93
+   steal_max_db                 -inf
+   notes                        2270
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 3
+   pitch_class_entropy_bits     2.80
+   repeated_30s_windows         0
+   intentional_marks            0
+   chroma_stripes               0
+   RESULT: PASS

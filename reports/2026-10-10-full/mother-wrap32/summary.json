@@ -1,0 +1,32 @@
+{
+  "mother-wrap32": {
+    "duration_s": 120.0,
+    "sample_peak_dbfs": -7.335711899549634,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -7.324553803491932,
+    "integrated_lufs": -24.06940766376813,
+    "mono_lufs": -25.075027366758977,
+    "mono_delta_lu": -1.005619702990849,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -141.72876509963805,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -62.80818912310167,
+    "lf_rel_db": -56.96096078314242,
+    "steal_max_db": -Infinity,
+    "notes": 122,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 1,
+    "pitch_class_entropy_bits": 2.3052864505130652,
+    "repeated_30s_windows": 0,
+    "intentional_marks": 0,
+    "chroma_stripes": 0,
+    "fails": [
+      "integrated loudness"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "drift-wrap32": {
+    "duration_s": 120.0,
+    "sample_peak_dbfs": -8.730442025579967,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -8.724914650548897,
+    "integrated_lufs": -19.542044375011237,
+    "mono_lufs": -21.089595738885613,
+    "mono_delta_lu": -1.5475513638743763,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -95.97439791172417,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -80.78138389789545,
+    "lf_rel_db": -59.91873666071604,
+    "steal_max_db": -Infinity,
+    "notes": 13,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 1,
+    "pitch_class_entropy_bits": 2.199687794731328,
+    "repeated_30s_windows": 0,
+    "chroma_stripes": 0,
+    "fails": []
+  }
+}

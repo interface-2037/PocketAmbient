@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"     # nightly: full 8-hour matrix
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python deps
+        run: pip install numpy scipy soundfile pyloudnorm matplotlib
+      - name: Tables are up to date
+        run: python tools/gen_tables.py && git diff --exit-code
+      - name: Build + unit tests
+        run: make test
+      - name: Long unit tests (nightly)
+        if: github.event_name == 'schedule'
+        run: ./build/tests --long
+      - name: Render + analyze (10 min per mode / corner / seed)
+        if: github.event_name != 'schedule'
+        run: EXE= tools/run_validation.sh quick 4
+      - name: Full render matrix (nightly)
+        if: github.event_name == 'schedule'
+        run: EXE= tools/run_validation.sh full 4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: reports/
+  # Phase 2+: Verilator module and full-system sims, RISC-V firmware build.
+  # Quartus builds need a self-hosted runner (see README).

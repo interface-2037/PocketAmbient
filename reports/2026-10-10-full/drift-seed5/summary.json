@@ -1,0 +1,30 @@
+{
+  "drift-seed5": {
+    "duration_s": 3600.0,
+    "sample_peak_dbfs": -2.1873967871845137,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -2.181869412153445,
+    "integrated_lufs": -18.97344753498945,
+    "mono_lufs": -19.09137331428971,
+    "mono_delta_lu": -0.11792577930026127,
+    "dead_air_longest_s": 7.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -82.64909010087449,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -71.61691189574657,
+    "lf_rel_db": -55.058397679077316,
+    "steal_max_db": -Infinity,
+    "notes": 675,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 3,
+    "pitch_class_entropy_bits": 3.513737562630036,
+    "repeated_30s_windows": 0,
+    "intentional_marks": 7,
+    "chroma_stripes": 102,
+    "fails": []
+  }
+}

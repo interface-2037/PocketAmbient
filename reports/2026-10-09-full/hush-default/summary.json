@@ -1,0 +1,29 @@
+{
+  "hush-default": {
+    "duration_s": 28800.0,
+    "sample_peak_dbfs": -4.394578702217655,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -4.386377760367759,
+    "integrated_lufs": -20.163898109596413,
+    "mono_lufs": -20.46428508451636,
+    "mono_delta_lu": -0.30038697491994526,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -86.77703383713721,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -53.5226652913778,
+    "lf_rel_db": -50.96644197669398,
+    "steal_max_db": -90.30899869919436,
+    "notes": 1885,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 11,
+    "pitch_class_entropy_bits": 3.0055442953029434,
+    "repeated_30s_windows": 0,
+    "chroma_stripes": 4053,
+    "fails": []
+  }
+}

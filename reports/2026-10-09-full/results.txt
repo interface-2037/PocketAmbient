@@ -1,0 +1,41 @@
+PASS drift-wrap32
+PASS drift-wrap31
+PASS tides-d1b1
+PASS tides-d1b5
+PASS tides-d5b1
+PASS drift-d1b5
+PASS drift-d1b1
+PASS drift-seed1
+PASS drift-seed2
+PASS drift-seed3
+PASS drift-seed5
+PASS drift-seed4
+PASS drift-d5b1
+PASS drift-d5b5
+PASS tides-wrap32
+PASS tides-wrap31
+PASS tides-d5b5
+PASS tides-seed1
+PASS tides-seed2
+PASS tides-seed3
+PASS tides-seed4
+PASS tides-seed5
+PASS hush-wrap32
+PASS hush-wrap31
+PASS hush-d1b1
+PASS hush-d1b5
+PASS hush-seed1
+PASS hush-d5b1
+PASS hush-d5b5
+PASS hush-seed2
+PASS switch-stress
+PASS hush-seed3
+PASS hush-seed4
+PASS hush-seed5
+PASS tides-default
+PASS drift-default
+PASS hush-default
+PASS determinism
+   integrated_lufs              -19.74
+   integrated_lufs              -19.79
+   integrated_lufs              -20.16

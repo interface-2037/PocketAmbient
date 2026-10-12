@@ -1,0 +1,25 @@
+== mother-seed4  (60.0 min)
+   duration_s                   3600.00
+   sample_peak_dbfs             -2.08
+   fullscale_samples            0
+   true_peak_dbtp               -2.06
+   integrated_lufs              -19.70
+   mono_lufs                    -20.45
+   mono_delta_lu                -0.75
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -106.78
+   clicks                       0
+   hf_rel_db                    -66.24
+   lf_rel_db                    -55.08
+   steal_max_db                 -inf
+   notes                        23955
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 4
+   pitch_class_entropy_bits     2.86
+   repeated_30s_windows         0
+   intentional_marks            1
+   chroma_stripes               0
+   RESULT: PASS

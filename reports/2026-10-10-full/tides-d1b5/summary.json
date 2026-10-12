@@ -1,0 +1,30 @@
+{
+  "tides-d1b5": {
+    "duration_s": 3600.0,
+    "sample_peak_dbfs": -6.37387207803462,
+    "fullscale_samples": 0,
+    "true_peak_dbtp": -6.368344703003551,
+    "integrated_lufs": -20.05766152667524,
+    "mono_lufs": -22.77393406195031,
+    "mono_delta_lu": -2.7162725352750705,
+    "dead_air_longest_s": 0.0,
+    "loudness_jumps": 0,
+    "loudness_jump_times_s": [],
+    "dc_worst_dbfs": -88.3885647643105,
+    "clicks": 0,
+    "click_times_s": [],
+    "hf_rel_db": -78.47308857550165,
+    "lf_rel_db": -62.925287828729054,
+    "steal_max_db": -Infinity,
+    "notes": 2270,
+    "retriggered_while_gated": 0,
+    "notes_over_max_len": 0,
+    "all_voices_gated_longest_s": 0.0,
+    "keys_visited": 3,
+    "pitch_class_entropy_bits": 2.799571837062559,
+    "repeated_30s_windows": 0,
+    "intentional_marks": 0,
+    "chroma_stripes": 0,
+    "fails": []
+  }
+}

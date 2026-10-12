@@ -1,0 +1,25 @@
+== drift-d1b1  (60.0 min)
+   duration_s                   3600.00
+   sample_peak_dbfs             -4.36
+   fullscale_samples            0
+   true_peak_dbtp               -4.36
+   integrated_lufs              -19.74
+   mono_lufs                    -19.83
+   mono_delta_lu                -0.08
+   dead_air_longest_s           5.00
+   loudness_jumps               0
+   dc_worst_dbfs                -86.63
+   clicks                       0
+   hf_rel_db                    -71.72
+   lf_rel_db                    -54.19
+   steal_max_db                 -inf
+   notes                        518
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 4
+   pitch_class_entropy_bits     3.49
+   repeated_30s_windows         0
+   intentional_marks            3
+   chroma_stripes               44
+   RESULT: PASS

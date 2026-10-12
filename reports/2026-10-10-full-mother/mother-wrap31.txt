@@ -1,0 +1,25 @@
+== mother-wrap31  (10.0 min)
+   duration_s                   600.00
+   sample_peak_dbfs             -8.93
+   fullscale_samples            0
+   true_peak_dbtp               -8.92
+   integrated_lufs              -21.56
+   mono_lufs                    -21.63
+   mono_delta_lu                -0.07
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -99.32
+   clicks                       0
+   hf_rel_db                    -53.41
+   lf_rel_db                    -59.41
+   steal_max_db                 -inf
+   notes                        1584
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 1
+   pitch_class_entropy_bits     1.43
+   repeated_30s_windows         0
+   intentional_marks            0
+   chroma_stripes               0
+   RESULT: PASS

@@ -1,0 +1,24 @@
+== drift-seed2  (60.0 min)
+   duration_s                   3600.00
+   sample_peak_dbfs             -6.32
+   fullscale_samples            0
+   true_peak_dbtp               -6.32
+   integrated_lufs              -19.52
+   mono_lufs                    -20.64
+   mono_delta_lu                -1.12
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -87.19
+   clicks                       0
+   hf_rel_db                    -81.43
+   lf_rel_db                    -60.34
+   steal_max_db                 -inf
+   notes                        233
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 3
+   pitch_class_entropy_bits     2.87
+   repeated_30s_windows         0
+   chroma_stripes               0
+   RESULT: PASS

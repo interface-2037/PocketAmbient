@@ -1,0 +1,26 @@
+== mother-default  (480.0 min)
+   duration_s                   28800.00
+   sample_peak_dbfs             -1.49
+   fullscale_samples            0
+   true_peak_dbtp               -1.48
+   integrated_lufs              -19.81
+   mono_lufs                    -20.56
+   mono_delta_lu                -0.74
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -101.76
+   clicks                       2
+   hf_rel_db                    -66.49
+   lf_rel_db                    -54.69
+   steal_max_db                 -inf
+   notes                        190603
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 15
+   pitch_class_entropy_bits     2.68
+   repeated_30s_windows         0
+   intentional_marks            9
+   chroma_stripes               1
+   click times (s): [np.float64(5994.4), np.float64(5994.4)]
+   RESULT: FAIL: clicks

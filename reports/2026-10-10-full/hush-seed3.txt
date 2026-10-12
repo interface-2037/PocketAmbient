@@ -1,0 +1,25 @@
+== hush-seed3  (60.0 min)
+   duration_s                   3600.00
+   sample_peak_dbfs             -3.02
+   fullscale_samples            0
+   true_peak_dbtp               -3.01
+   integrated_lufs              -19.80
+   mono_lufs                    -19.92
+   mono_delta_lu                -0.11
+   dead_air_longest_s           0.00
+   loudness_jumps               0
+   dc_worst_dbfs                -82.81
+   clicks                       0
+   hf_rel_db                    -55.19
+   lf_rel_db                    -44.59
+   steal_max_db                 -60.07
+   notes                        10490
+   retriggered_while_gated      0
+   notes_over_max_len           0
+   all_voices_gated_longest_s   0.00
+   keys_visited                 2
+   pitch_class_entropy_bits     2.96
+   repeated_30s_windows         0
+   intentional_marks            0
+   chroma_stripes               0
+   RESULT: PASS

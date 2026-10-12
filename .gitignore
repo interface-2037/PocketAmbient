@@ -1,0 +1,21 @@
+build/
+renders/
+reports/*/work/
+*.wav
+*.raw
+*.exe
+__pycache__/
+gmon.out
+# Quartus outputs (later phases)
+src/fpga/**/db/
+src/fpga/**/incremental_db/
+src/fpga/**/output_files/
+dist/
+
+vendor/core-template/.git/
+
+# simulation scratch and local tool settings
+sim/out/
+sim/vectors/
+.claude/
+vendor/core-template/

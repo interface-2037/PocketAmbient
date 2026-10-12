@@ -1,0 +1,14 @@
+PASS mother-wrap31
+PASS mother-wrap32
+PASS mother-d5b1
+PASS mother-seed2
+PASS mother-seed3
+PASS mother-seed1
+PASS mother-d5b5
+PASS mother-seed5
+PASS mother-d1b1
+PASS mother-d1b5
+PASS mother-seed4
+PASS mother-default
+PASS determinism
+   integrated_lufs              -21.51
