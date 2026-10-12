@@ -459,6 +459,43 @@ TEST(test_stress_switching)
     CHECK(o.peak < 29300, "peak %d above -1 dBFS during switching", o.peak);
 }
 
+/* D53: a mode change during the stop fade-out must not run the old mode's union state as the
+ * new mode's (it used to write voice indices like 301), with and without a restart in the fade */
+TEST(test_stop_switch)
+{
+    for (uint32_t m = 0; m < MODE_COUNT; m++)
+        for (int restart = 0; restart < 2; restart++)
+            for (int dir = 0; dir < 2; dir++) {
+                run_cfg_t c = {0};
+                run_out_t o = {0};
+                c.mode = m; c.seed = 11 + m; c.ms = 30000;
+                c.press[0].at = 1; c.press[0].btn = BTN_A;
+                c.press[1].at = 15000; c.press[1].btn = BTN_A;              /* stop: 3 s fade */
+                c.press[2].at = 15500; c.press[2].btn = dir ? BTN_LEFT : BTN_RIGHT;
+                c.press[3].at = 16000; c.press[3].btn = BTN_A;              /* change of heart */
+                c.npress = restart ? 4 : 3;
+                if (!restart) o.zero_from_ms = 15000 + 3000 + 2;
+                run_system(&c, &o);
+                int bad = 0, on_after = 0;
+                for (size_t i = 0; i < g_ntr; i++) {
+                    if (g_tr[i].kind != TR_NOTE_ON && g_tr[i].kind != TR_NOTE_OFF) continue;
+                    bad += g_tr[i].a >= AP_NUM_VOICES;
+                    on_after += g_tr[i].kind == TR_NOTE_ON && g_tr[i].tick > 16000;
+                }
+                const comp_t *cs = composer_state();
+                CHECK(bad == 0, "mode %u dir %d restart %d: %d out-of-range voice indices", m, dir, restart, bad);
+                if (restart) {
+                    CHECK(cs->state == CS_PLAYING && cs->m_mode == cs->mode,
+                          "mode %u dir %d: new mode not running after the restart", m, dir);
+                    CHECK(on_after > 0, "mode %u dir %d: no notes after the restart", m, dir);
+                } else {
+                    CHECK(o.nonzero_after == 0, "mode %u dir %d: %llu non-zero samples after the fade-out",
+                          m, dir, (unsigned long long)o.nonzero_after);
+                    CHECK(cs->state == CS_TITLE && on_after == 0, "mode %u dir %d: notes after the stop", m, dir);
+                }
+            }
+}
+
 /* the voice allocator never steals a gated voice, and frees voices after release */
 TEST(test_allocator)
 {
@@ -606,6 +643,7 @@ int main(int argc, char **argv)
     RUN(test_determinism);
     RUN(test_fades_and_stop);
     RUN(test_stress_switching);
+    RUN(test_stop_switch);
     RUN(test_tides_system);
     RUN(test_drift_system);
     RUN(test_tick_overflow);

@@ -160,6 +160,7 @@ static void mode_begin(comp_t *c, uint32_t fx_ramp_ms)
     c->gen = (uint8_t)(c->gen % 250 + 1);
     reseed_streams(c);
     hal_trace(TR_MODE, c->mode, c->gen, 0);
+    c->m_mode = c->mode;
     MODES[c->mode]->start(c);
     c_schedule_key_change(c);
     fx_retarget(c, fx_ramp_ms);
@@ -169,6 +170,7 @@ static void mode_end(comp_t *c)
 {
     sched_cancel_owner(&c->sched, c->gen);
     voices_release_owner(c->gen, env_release_ms(XFADE_RELEASE));
+    c->m_mode = MODE_COUNT;                 /* c->m is no longer a running mode's state */
 }
 
 static void new_session_seed(comp_t *c, uint32_t s)
@@ -197,6 +199,7 @@ static void do_start(comp_t *c)
     if (c->state == CS_STOPPING) {           /* change of heart: fade back in */
         master_fade(GAIN_UNITY, FADE_IN_MS);
         set_state(c, CS_PLAYING);
+        if (c->m_mode != c->mode) mode_begin(c, XFADE_MS);   /* the mode changed during the fade */
         return;
     }
     c->play_start = c->now;
@@ -219,6 +222,9 @@ static void do_switch(comp_t *c, uint8_t new_mode)
         c->mode = new_mode;
         mode_begin(c, XFADE_MS);
     } else {
+        /* Stopped or fading out: the new mode starts with the next start. c->m is a union, so
+         * the old mode's state must not be run as the new mode's (D53): end the old piece now. */
+        if (c->state == CS_STOPPING && c->m_mode != MODE_COUNT) mode_end(c);
         c->mode = new_mode;
         fx_retarget(c, 0);
     }
@@ -300,6 +306,7 @@ void composer_init(void)
     c->now = hal_ticks();
     sched_init(&c->sched);
     voices_reset();
+    c->m_mode = MODE_COUNT;
     read_menu(c, 1);
     c->settings_seq = hal_ctrl_read(CR_SETTINGS_SEQ);
     uint32_t seed = c->seed_lock ? c->user_seed
@@ -334,7 +341,7 @@ void composer_tick(void)
                     voice_off(v);
                 continue;
             }
-            if (e.owner != c->gen) continue;
+            if (e.owner != c->gen || c->m_mode != c->mode) continue;
             if (e.type == EV_KEY) {
                 c->key = key_neighbor(c->key, &c->r_harm);
                 hal_trace(TR_KEY, (uint32_t)c->key.tonic, (uint32_t)c->key.centre, 0);
@@ -342,7 +349,8 @@ void composer_tick(void)
             }
             MODES[c->mode]->event(c, &e);
         }
-        if (c->state == CS_PLAYING || c->state == CS_STOPPING) MODES[c->mode]->tick(c);
+        if ((c->state == CS_PLAYING || c->state == CS_STOPPING) && c->m_mode == c->mode)
+            MODES[c->mode]->tick(c);
         fx_ramp_tick(c);
     }
 
