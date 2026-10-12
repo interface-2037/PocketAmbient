@@ -33,7 +33,7 @@ TH = dict(
     jump_lu_mother=8.0,    # D35 interim 10 LU no longer needed after the D37 rework
     dc_dbfs=-60.0,
     hf_rel_db=-50.0, lf_rel_db=-40.0,
-    mono_lu=3.0,
+    mono_lu=3.0,           # informational only (D49)
     voice_budget_max_s=60.0,
     min_keys=3,
 )
@@ -342,7 +342,7 @@ def check(r, stress=False):
     f(r["clicks"] == 0, "clicks")
     f(r["hf_rel_db"] < TH["hf_rel_db"], "HF energy (aliasing)")
     f(r["lf_rel_db"] < TH["lf_rel_db"], "LF energy (<20 Hz)")
-    f(abs(r["mono_delta_lu"]) <= TH["mono_lu"], "mono compatibility")
+    # mono_delta_lu is informational only (DECISIONS D49): the Pocket's speaker is stereo
     if "notes" in r:
         f(r["retriggered_while_gated"] == 0 and r["notes_over_max_len"] == 0, "stuck notes")
         f(r["steal_max_db"] <= STEAL_MAX_DB, "audible voice steal")
@@ -430,6 +430,8 @@ def main():
             print("   click times (s):", r["click_times_s"])
         if r.get("loudness_jump_times_s"):
             print("   jump times (s):", r["loudness_jump_times_s"])
+        if abs(r["mono_delta_lu"]) > TH["mono_lu"]:
+            print(f"   note: mono {r['mono_delta_lu']:+.2f} LU vs stereo (informational, limit {TH['mono_lu']} LU)")
         print("   RESULT:", "PASS" if not fails else "FAIL: " + ", ".join(fails))
 
     louds = [v["integrated_lufs"] for v in summary.values() if math.isfinite(v["integrated_lufs"])]
