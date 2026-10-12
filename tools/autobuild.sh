@@ -72,6 +72,8 @@ if [ "$TARGET" != "$BUILT" ]; then
         LOG="$WT/build/fpga_$SHORT.log"
         # a normal build takes ~15 min; Quartus synthesis once hung idle for an hour (2026-10-12),
         # so give each attempt 45 min and retry once on a timeout
+        SUM="$WT/src/fpga/output_files/ap_core.sta.summary"
+        rm -f "$SUM"                    # never judge a build by an older run's timing report
         for attempt in 1 2; do
             ( cd "$WT/src/fpga" && PATH="$QUARTUS_BIN:$PATH" timeout -k 30 2700 quartus_sh --flow compile ap_core ) > "$LOG" 2>&1
             rc=$?
@@ -80,7 +82,10 @@ if [ "$TARGET" != "$BUILT" ]; then
             powershell.exe -NoProfile -Command "Get-Process quartus* -ErrorAction SilentlyContinue | Stop-Process -Force" > /dev/null 2>&1
         done
         [ $rc -eq 0 ] || fail "Quartus build of $SHORT failed (exit $rc), see $LOG ($(grep -m1 '^Error' "$LOG"))"
-        SUM="$WT/src/fpga/output_files/ap_core.sta.summary"
+        if [ ! -f "$SUM" ]; then       # smart recompile reused an earlier fit and skipped STA
+            ( cd "$WT/src/fpga" && PATH="$QUARTUS_BIN:$PATH" quartus_sta ap_core ) >> "$LOG" 2>&1
+            [ -f "$SUM" ] || fail "no timing report for $SHORT, see $LOG"
+        fi
         ANY="$(sed -n 's/^Slack *: *//p' "$SUM" | sort -g | head -1)"
         case "$ANY" in -*) fail "timing NOT met in $SHORT: worst slack $ANY ns (see $SUM)";; esac
         WORST="$(awk '/^Type/ {s = /Setup .clk_74a/} /^Slack/ && s {print $3}' "$SUM" | sort -g | head -1) ns setup"
