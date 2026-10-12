@@ -20,8 +20,8 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 | 2: voice engine RTL | done; bit-exact vs the C model (Icarus) |
 | 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12); tick spacing confirmed on hardware with v0.4.0 |
 | 4: CPU integration | done; v0.4.0 tested on hardware (2026-10-11), firmware from the SD card works |
-| 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11). Open: HUSH BPM readout when stopped (docs/TEST_REPORT.md) |
-| 6: timing closure, soak | not started |
+| 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11). v0.4.1 fixes the title-screen readouts after a stopped mode change (D53) and adds the platform art and icon (D54) |
+| 6: timing closure, soak | v0.4.1: FX multiplier pipelined and the menu status path registered for timing margin (D55); 10.2 M-sample voice-engine soak and mutation check pass (docs/TEST_REPORT.md). Hardware fit and test pending |
 
 ## Layout
 
@@ -37,7 +37,7 @@ model/rvsim.c          RV32IMC instruction-set simulator: runs the real firmware
 src/fpga/core/         RTL: ap_top.sv, synth/ (engine), cpu/ (PicoRV32 system + firmware image), ui/ (video), test/ (Phase 3)
 sim/                   RTL testbenches (Icarus) and the Verilator full-system sim (run_sys.sh)
 tests/                 unit + system tests
-tools/                 table generator, audio analyzer, validation runner
+tools/                 table generator, audio analyzer, validation runner, ui/ (screen mockups, platform art + icon)
 docs/                  decisions, fixed-point formats, memory budget, register map, test report
 ```
 
@@ -50,6 +50,9 @@ make fw                     # build/fw/composer.elf, .bin, .map -> src/fpga/core
 tools/check_fw.sh 60        # firmware on the ISS == host render, all modes (needs make)
 build/rvsim --mode tides --seconds 6 --frames 2,5 --frame-prefix build/tides   # screens as PPM
 sim/run_sys.sh 60           # Verilator: CPU + firmware + engine == host render (slow: ~1 MHz)
+sim/run_fuzz.sh 12 850000   # random-stimulus soak of the voice engine vs the C model (TB=audio: + FX)
+SIM=verilator sim/run_fuzz.sh ...   # same testbench under Verilator, ~30x faster than Icarus
+sim/mutate.sh               # proves the fuzz bench catches deliberate RTL bugs
 ```
 
 Packaging (after the Quartus build): `python tools/package.py` makes the release zip (firmware inside the bitstream). `python tools/package.py --dev` makes a dev zip that also loads `Assets/ambient/common/composer.bin` from the SD card: after `make fw`, copying the new `composer.bin` there is enough to try new music, with no Quartus rebuild (DECISIONS D50).
@@ -106,6 +109,5 @@ Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/
 
 ## Known limitations
 
-- v0.4.0 is the first build with everything: live composer, buttons, core menu and the per-mode screens. Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the CPU stopped.
-- HUSH's BPM readout shows a garbage value on the title screen after a mode change while stopped (display only; docs/TEST_REPORT.md).
+- v0.4.0 was the first build with everything: live composer, buttons, core menu and the per-mode screens. Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the CPU stopped. v0.4.1 is a fix and margin release; what to check on the Pocket is in `docs/HW_TEST_NEXT.md`.
 - The host renderer runs at ~90–140× realtime (spec target 200×). See docs/DECISIONS.md D14.

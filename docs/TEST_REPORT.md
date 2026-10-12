@@ -1,5 +1,48 @@
 # Test report
 
+## v0.4.1: fixes, timing margin, Phase 6 soak (simulation, 2026-10-12)
+
+No Quartus in the cloud environment (see below), so the fit and timing are measured by the PC build. Everything here is simulation. Hardware checklist: `docs/HW_TEST_NEXT.md`.
+
+**A. Title-screen readouts / stopped mode change (D53)**
+
+| Check | Result |
+|---|---|
+| Instrumented host render (ASan + UBSan, voice index checked in `hal_vwrite`): stop, then 1–2 mode changes in the fade-out, with and without A again in the fade; every mode, 4 seeds, at 20 / 45 / 90 s | **before: 246 of 260 runs fail** (out-of-range role voice indices, e.g. HUSH → TIDES writes voice 301; up to 1,966,097); **after: 0 of 288** |
+| Music unchanged: v0.4.0 vs v0.4.1 host render, 4 modes × 2 seeds × {autostart only; switches, stop/start, reseed, menu changes}, 120 s each | **16 / 16 byte-identical** |
+| Firmware on the ISS == host render (`tools/check_fw.sh 60`), and 70 s with 13 presses including stop + switch + restart in the fade | **bit-identical**, all modes |
+| Title screens after a stopped mode change (ISS frames, `docs/ui/title_v0.4.1.png`) | HUSH `---` BPM, `BAR --`, no chords; DRIFT / TIDES / MOTHER readouts `--` |
+| Unit tests (`make test`) incl. new `test_stop_switch` (4 modes × 2 directions × with / without restart) | 495,008 checks, 0 failed |
+
+**B. Timing changes (D55): bit-exactness and cycles**
+
+| Check | Result |
+|---|---|
+| Voice vectors, Icarus, 0.5 s per mode | **pass** (bit-exact) |
+| Audio (voice + FX) vectors, Icarus, 0.25 s per mode | **pass**, max 457–537 cycles/sample |
+| Audio vectors, Verilator, 6 s per mode (288,000 samples each), v0.4.0 vs v0.4.1 FX engine | both bit-exact; worst cycles/sample DRIFT 447 → 497, TIDES 437 → 487, HUSH 527 → 577, MOTHER 507 → 557 (+50 everywhere) |
+| FX fuzz (`TB=audio sim/run_fuzz.sh`): Verilator 4 × 250,000 + Icarus 4 × 15,000 | **1,060,000 samples bit-exact**; random-stimulus worst 767 cycles/sample (50 % of 1,546) |
+| `tb_settings`, `tb_fb_video` | **pass** |
+| `tb_ap_top` (Icarus, pin-level 55 ns SRAM, CPU + firmware, menu read-back) | **pass**: 480 samples bit-exact, CPU max 230,967 cycles/tick, frame gap 1546..1547 |
+| Full system, Verilator (`sim/run_sys.sh`): CI script (2 s, menu mode / reseed / density) | **bit-identical**, all modes |
+| Full system, 20 s per mode, presses `6:A,6.5:RIGHT,7:A,13:A,13.4:LEFT,17:A` (stop + switch + restart in the fade, twice) | **bit-identical**, all modes; CPU max 230,912–230,967 cycles/tick; 0 underruns |
+| Full system, 60 s per mode, seed 456 (2.88 M samples and 2.1–2.4 G cycles per mode) | **bit-identical**, all modes; CPU max 231,199–231,254 cycles/tick; 0 underruns; no trap or bus error |
+
+Expected on hardware: engine worst case ~734 of 1,546 cycles (v0.4.0: 684). Timing: every one of the 200 worst v0.4.0 paths from `fx_engine|Mult0` (+0.209 … +1.782 ns) and `cpu_sys|tick` (+1.063 / +1.359 ns) is cut by a register, so the worst path should move to the voice engine's `ve_mul|p -> Add45` (+1.398 ns in v0.4.0, unchanged logic), about **+1.4 ns**. Fitter seed noise can shift that by a few hundred ps.
+
+**C. Phase 6 soak: randomized stimulus on the re-timed voice engine**
+
+| Check | Result |
+|---|---|
+| `SIM=verilator TAG=soakA SEED0=1000 sim/run_fuzz.sh 12 850000` (`model/fuzz.c`, 12 new seeds) | **12 / 12 streams pass, 10,200,000 samples bit-exact**, 185,661 random register writes (spec: ≥ 10 M) |
+| Same bench under Icarus (4-state), 4 × 40,000, seeds 2000+ | **160,000 samples bit-exact** |
+| Total randomized voice-engine samples to date | ~12.2 M (1.8 M earlier + 10.36 M now), plus 1.06 M through voice + FX |
+| Mutation check (`SIM=verilator sim/mutate.sh 200000`): 14 one-token RTL bugs in `voice_engine.sv` | **14 / 14 caught** |
+
+The Verilator option (`SIM=verilator`) runs the same testbench ~30× faster than Icarus. It is 2-state (X becomes 0), so Icarus stays the default and is still run on part of each batch.
+
+**E. Quartus in the cloud:** not possible in this environment. The egress proxy refuses `downloads.intel.com`, `www.intel.com` and `cdrdv2.intel.com` (HTTP 403, organization policy). The machine itself would be enough (4 cores, 15 GB RAM, ~28 GB free disk for Lite + Cyclone V). Allowing those hosts in the environment's network policy would make an install worth trying. Nothing was added to CI.
+
 ## Phases 4–5: v0.4.0 on hardware (2026-10-11)
 
 Build: Quartus Lite 25.1std on Windows (`build/fpga_v040.log`, 15 min). **Fit:** 11,740 ALMs (64 %), 15,581 registers, 301 / 308 M10K (98 %), 26 DSP, 224 / 224 pins. **Timing met in every corner:** worst setup slack +0.209 ns (`clk_74a`, slow 1100 mV 0 °C; +0.848 ns at 85 °C), worst hold +0.062 ns. Tested as the **dev** package (`AmbientPocket-0.4.0-dev.zip`: firmware loaded from `Assets/ambient/common/composer.bin`, 47,452 bytes).
@@ -14,7 +57,7 @@ Result from the user: **everything looks and sounds great**, apart from two HUSH
 
 - **Phase 3 tick question settled:** on hardware the LRCK-derived frame tick is spaced 1546–1547 `clk_74a` cycles, exactly as simulated, and the FIFO never underran. The saturated overrun counter in v0.2.3 was not caused by irregular ticks; that build's overrun logic is gone with `engine_test.sv`.
 - **Feedback for later (HUSH):**
-  1. **BPM readout overflows when stopped:** it showed "11566", overlapping the "BPM" label. Cause: changing mode while stopped (`do_switch`, `fw/composer/composer.c`) only changes `c->mode`; the per-mode state is a union (`c->m`), so the HUSH screen reads the previous mode's state as `hush_t` until HUSH starts. Display only. Fix options: blank the mode-specific readouts on the title screen in `fw/ui/ui.c`, or clear `c->m` on a stopped mode switch (composer change: check `rvsim` vs `render` stays bit-identical).
+  1. **BPM readout overflows when stopped** (fixed in v0.4.1, D53): it showed "11566", overlapping the "BPM" label. Cause: changing mode while stopped (`do_switch`, `fw/composer/composer.c`) only changes `c->mode`; the per-mode state is a union (`c->m`), so the HUSH screen reads the previous mode's state as `hush_t` until HUSH starts. Display only. Fix options: blank the mode-specific readouts on the title screen in `fw/ui/ui.c`, or clear `c->m` on a stopped mode switch (composer change: check `rvsim` vs `render` stays bit-identical).
   2. **Audible crackle:** the user believes it is the intended vinyl crackle (D27, thinned in D34 to ~4 pops/s), and 0 underruns supports that. Revisit its level in a music pass.
 
 ## Phase 5: menu and screens, simulation (2026-10-12)
