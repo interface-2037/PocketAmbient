@@ -96,8 +96,11 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 
 ## Bridge (APF) addresses
 
+Every read word is captured on the `bridge_rd` strobe and held; `core_top` selects the device by the region of the last strobe (D57).
+
 | Address | Use |
 |---|---|
 | `0x2000_0000`–`0x2000_FFFF` | Composer firmware data slot (dev builds, D50): writes CPU RAM while the core is in reset; words byte-swapped from the bridge's big-endian order |
-| `0x5000_0000` + 4·k | Core menu (D51, `pkg/interact.json`): k = 0 Mode, 1 Density, 2 Brightness, 3 Reverb, 4 Visuals, 5 Lock seed, 6 Seed, 7 Sleep, 8 Reseed (action). Reads return the composer's live value. |
+| `0x5000_0000` + 4·k | Core menu (D51, `pkg/interact.json`): k = 0 Mode, 1 Density, 2 Brightness, 3 Reverb, 4 Visuals, 5 Lock seed, 6 Seed, 7 Sleep, 8 Reseed (action). Reads return the composer's last live value, also in reset (D57). |
+| `0x6000_0000`–`0x6000_001F` | Save slot `ambient.sav` (slot id 1, D58): 8 words, magic `AMBS`, lock, seed, settings, check word |
 | `0xF8xx_xxxx` | APF command block (template `core_bridge_cmd.v`) |
