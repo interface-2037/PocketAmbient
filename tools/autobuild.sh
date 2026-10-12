@@ -4,8 +4,9 @@
 #   tools/autobuild.sh            build origin/$BRANCH if it moved, install on the SD card if mounted
 #   tools/autobuild.sh --status   print the state only
 #
-# The cloud pushes to $BRANCH (default cloud/next). This script keeps a separate git worktree at
-# $WT on that branch, so the main checkout is never touched. Per new commit it:
+# The cloud pushes to one of $BRANCHES (default "cloud/next claude/v041"; cloud sessions may only be
+# allowed to push claude/* branches). The branch with the newest commit wins. This script keeps a
+# separate git worktree at $WT, so the main checkout is never touched. Per new commit it:
 #   1. runs the Quartus build if src/fpga/ or pkg/ changed (or there is no bitstream yet),
 #      and fails on any negative slack in output_files/ap_core.sta.summary;
 #   2. packages release + dev zips (tools/package.py) into dist/autobuild/<version>-<sha>/;
@@ -14,7 +15,7 @@
 # The last line printed is one RESULT line for the caller (the scheduled task) to report.
 set -u
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-BRANCH="${BRANCH:-cloud/next}"
+BRANCHES="${BRANCHES:-cloud/next claude/v041}"
 WT="${WT:-$REPO/../PocketAmbient-autobuild}"
 SD="${SD:-/h}"
 QUARTUS_BIN="${QUARTUS_BIN:-/c/altera_lite/25.1std/quartus/bin64}"
@@ -35,7 +36,13 @@ if ! mkdir "$LOCK" 2>/dev/null; then result "skipped, another autobuild run is i
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 git -C "$REPO" fetch -q origin || fail "git fetch failed"
-TARGET="$(git -C "$REPO" rev-parse -q --verify "origin/$BRANCH")" || result "no branch origin/$BRANCH yet, nothing to build"
+TARGET=""; BEST=0
+for b in $BRANCHES; do
+    sha="$(git -C "$REPO" rev-parse -q --verify "origin/$b")" || continue
+    t="$(git -C "$REPO" log -1 --format=%ct "$sha")"
+    if [ "$t" -gt "$BEST" ]; then BEST=$t; TARGET=$sha; BRANCH=$b; fi
+done
+[ -n "$TARGET" ] || result "none of origin/{${BRANCHES// /,}} exists yet, nothing to build"
 SHORT="${TARGET:0:7}"
 BUILT="$(get built)"
 INSTALLED="$(get installed)"
@@ -76,7 +83,7 @@ if [ "$TARGET" != "$BUILT" ]; then
       && cp -r dist/sdcard "$DEST/sdcard" ) || fail "packaging $SHORT failed"
     [ -f "$WT/docs/HW_TEST_NEXT.md" ] && cp "$WT/docs/HW_TEST_NEXT.md" "$DEST/"
     put built "$TARGET"; put version "$VERSION"
-    echo "built v$VERSION ($SHORT): worst slack $WORST; $FIT"
+    echo "built v$VERSION ($SHORT, $BRANCH): worst slack $WORST; $FIT"
     BUILT="$TARGET"
 fi
 
