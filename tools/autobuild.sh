@@ -70,8 +70,16 @@ if [ "$TARGET" != "$BUILT" ]; then
     if [ $NEED_FPGA = 1 ]; then
         echo "Quartus build of $SHORT (v$VERSION) ..."
         LOG="$WT/build/fpga_$SHORT.log"
-        ( cd "$WT/src/fpga" && PATH="$QUARTUS_BIN:$PATH" quartus_sh --flow compile ap_core ) > "$LOG" 2>&1 \
-            || fail "Quartus build of $SHORT failed, see $LOG ($(grep -m1 '^Error' "$LOG"))"
+        # a normal build takes ~15 min; Quartus synthesis once hung idle for an hour (2026-10-12),
+        # so give each attempt 45 min and retry once on a timeout
+        for attempt in 1 2; do
+            ( cd "$WT/src/fpga" && PATH="$QUARTUS_BIN:$PATH" timeout -k 30 2700 quartus_sh --flow compile ap_core ) > "$LOG" 2>&1
+            rc=$?
+            [ $rc -eq 124 ] || [ $rc -eq 137 ] || break
+            echo "Quartus attempt $attempt timed out after 45 min"
+            powershell.exe -NoProfile -Command "Get-Process quartus* -ErrorAction SilentlyContinue | Stop-Process -Force" > /dev/null 2>&1
+        done
+        [ $rc -eq 0 ] || fail "Quartus build of $SHORT failed (exit $rc), see $LOG ($(grep -m1 '^Error' "$LOG"))"
         SUM="$WT/src/fpga/output_files/ap_core.sta.summary"
         ANY="$(sed -n 's/^Slack *: *//p' "$SUM" | sort -g | head -1)"
         case "$ANY" in -*) fail "timing NOT met in $SHORT: worst slack $ANY ns (see $SUM)";; esac
