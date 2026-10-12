@@ -5,7 +5,8 @@
 
   src/fpga/core/ui/font8.hex        64 glyphs (ASCII 32..95) x 8 rows, bit 7 = leftmost.
                                     The square 5x7 font of the UI mockups (tools/ui/mockup.py).
-  src/fpga/core/ui/screen_test.hex  initial character RAM of the Phase 3 test screen:
+  src/fpga/core/ui/screen_test.hex  initial character RAM of the hardware test screen
+                                    (Phase 4: sys_test.sv draws the values):
                                     1024 entries {colour[1:0], code[5:0]} at {row[4:0], col[4:0]},
                                     20 x 18 cells of 16 x 16 pixels.
 """
@@ -25,19 +26,19 @@ DIM, AMBER, GREEN, RED = 0, 1, 2, 3
 # (row, col, colour, text); dynamic fields are drawn over by the test top level
 SCREEN = [
     (1, 3, AMBER, "AMBIENT POCKET"),
-    (2, 1, DIM, "ENGINE TEST V" + VERSION),
-    (4, 1, AMBER, "SRAM WAIT TEST"),
-    (5, 0, DIM, "6:-- 5:-- 4:-- 3:--"),
-    (6, 0, DIM, "---- ---- ---- ----"),
-    (8, 1, AMBER, "PLAYING"),
-    (9, 1, GREEN, "------"),
-    (9, 13, DIM, "00:00"),
-    (11, 1, DIM, "MAX CYCLES"),
-    (11, 13, AMBER, "---"),
-    (12, 1, DIM, "OVERRUNS"),
-    (12, 13, AMBER, "--"),
-    (14, 1, DIM, "A  NEXT EXCERPT"),
-    (15, 1, DIM, "B  RESTART"),
+    (2, 1, DIM, "SYSTEM TEST V" + VERSION),
+    (4, 1, DIM, "MODE"),
+    (5, 1, DIM, "STATE"),
+    (6, 1, DIM, "UPTIME"),
+    (8, 1, DIM, "CPU MAX"),
+    (9, 1, DIM, "FIFO MIN"),
+    (10, 1, DIM, "UNDERRUN"),
+    (11, 1, DIM, "FRAME MIN"),
+    (12, 1, DIM, "FRAME MAX"),
+    (13, 1, DIM, "CPU"),
+    (15, 1, DIM, "A  START / STOP"),
+    (16, 1, DIM, "LEFT RIGHT  MODE"),
+    (17, 1, DIM, "B  RESEED"),
 ]
 
 

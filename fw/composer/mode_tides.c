@@ -10,8 +10,9 @@
  *     4-10 s, voice-led by glide, filter phrasing per chord, a sparse melodic
  *     random walk with rests and pitch "sighs", rare bells and rarer thunder.
  */
-#include <stdlib.h>
 #include "cint.h"
+
+static int iabs(int x) { return x < 0 ? -x : x; }   /* freestanding: no <stdlib.h> */
 
 #define T (c->m.t)
 #define T_BUDGET   14
@@ -256,7 +257,7 @@ static void lead_tick(comp_t *c)
         int best = pitch, bd = 99;
         for (int i = 0; i < n; i++)
             for (int k = 0; k < npc; k++)
-                if (sc[i] % 12 == pcs[k] && abs(sc[i] - pitch) < bd) { bd = abs(sc[i] - pitch); best = sc[i]; }
+                if (sc[i] % 12 == pcs[k] && iabs(sc[i] - pitch) < bd) { bd = iabs(sc[i] - pitch); best = sc[i]; }
         pitch = best;
     }
     int first = T.lead_p == 0;

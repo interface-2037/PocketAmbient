@@ -44,4 +44,4 @@ Echo is capped at 750 ms per side (the spec allows up to 800 ms if it fits). Ech
 | FIFOs | ~512 |
 | **Total** | **~150,000 (~39%)** |
 
-Firmware size is unknown until the RISC-V build exists (Phase 4). The composer tables are ~2 KB, and composer state is ~8 KB (dominated by the 256-entry scheduler heap).
+**Firmware (Phase 4, measured):** RV32IMC at `-Os`, 38.2 KB image (code + read-only tables), 7.9 KB `.bss` (composer state, dominated by the 256-entry scheduler heap), 4 KB stack (1.1 KB used at most in the ISS runs). Everything ends at 0xC220, leaving ~15 KB of the 64 KB CPU RAM free. Without compressed instructions (RV32IM) the code alone is 52 KB, which would not leave enough room. Audio FIFO: 1024 × 32 bits (4 KB).

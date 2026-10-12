@@ -1,5 +1,23 @@
 # Test report
 
+## Phase 4: CPU integration, simulation (2026-10-12)
+
+Firmware: `make fw` (clang 18 / lld, RV32IMC `-Os`), 38.2 KB image. Hardware build v0.3.0 (`sys_test.sv`) not yet tested on the Pocket.
+
+| Check | Result |
+|---|---|
+| Firmware on the ISS vs host render (`model/rvsim.c`), 60 s per mode, seed 123 | **bit-identical**, all four modes |
+| Same, 10 min per mode, seed 7, 19 scripted presses (mode switches, stop / start, reseed, every button) | **bit-identical**, all four modes |
+| 64-bit division / memcpy / memset helpers (`fw/rv/rt.c`) vs native, 20 M random + edge cases | 0 failures |
+| Full system in Verilator (`sim/run_sys.sh`): PicoRV32 + firmware + voice/FX engine, SRAM model with sram_ctrl latency, real 48 kHz pacing, DRIFT 1 s | **bit-identical**; worst tick 180,601 CPU cycles (boot); FIFO never below the 512-frame prime level; 0 underruns |
+| Full system, fast pacing, 60 s per mode | @@SYS60@@ |
+| `sys_test` (v0.3.0 top) in Icarus through the pin-level 55 ns SRAM model: boot, SRAM clear, A press via `cont1_key`, 5 ms | **pass**: samples bit-identical, screen shows DRIFT / PLAY, frame gap 1546–1547 |
+| Unit tests (`make test`) after the firmware changes | 494,960 checks, 0 failed |
+
+**CPU load** (ISS estimate; RTL measured where noted): average ~2.5–4k cycles per 1 ms tick (74,250 available), so the CPU is idle > 90 % of the time. Heavy ticks: boot (`composer_init` + tick 0) 180,601 cycles measured in RTL; chord / voicing changes up to ~150k estimated. These run ahead into the 1024-frame audio FIFO; the worst lead needed was ~90 frames, against 512 frames of prime.
+
+**Still to do for Phase 4:** the v0.3.0 hardware test (fit, timing at 74.25 MHz with the CPU added, and listening), and loading the firmware from an SD data slot for dev builds (D44).
+
 ## Phase 3: engine test on hardware (2026-10-12)
 
 Build v0.2.3 (`engine_test.sv`): SRAM BIST, then recorded composer excerpts (seed 123, `tools/gen_vecrom.py`) replayed through the real voice engine, FX engine and SRAM. Tested by the user; screenshots taken a few seconds into each excerpt. **All four excerpts sound good.**

@@ -295,7 +295,7 @@ assign dram_ras_n = 'h1;
 assign dram_cas_n = 'h1;
 assign dram_we_n = 'h1;
 
-// SRAM: driven by the Phase 3 engine test (engine_test below)
+// SRAM: driven by the Phase 4 system test (sys_test below)
 
 assign dbg_tx = 1'bZ;
 assign user1 = 1'bZ;
@@ -650,17 +650,17 @@ always @(posedge audgen_mclk) begin
     aud_mclk_divider <= aud_mclk_divider + 1'b1;
 end
 
-// Phase 3: the audio engine plays recorded composer excerpts (engine_test), one sample
-// per I2S frame. The frame tick is the LRCK edge that starts the left channel, brought into
-// clk_74a; the engine finishes well inside the frame, and the I2S side loads both channels
-// at the next frame start, so pcm_l / pcm_r are stable whenever they are read.
+// Phase 4: the composer firmware on the PicoRV32 drives the audio engine (sys_test / cpu_sys).
+// The frame tick is the LRCK edge that starts the left channel, brought into clk_74a; each
+// tick pops one frame from the audio FIFO into pcm_l / pcm_r, which then stay stable until
+// the I2S side loads them at the next frame start.
     reg     [2:0]   lrck_s;
     always @(posedge clk_74a) lrck_s <= {lrck_s[1:0], audgen_lrck};
     wire            frame_tick = lrck_s[2:1] == 2'b10;          // LRCK fell: left channel starts
     wire    [15:0]  pcm_l, pcm_r;
     reg     [15:0]  pcm_r_hold;
 
-engine_test et (
+sys_test et (
     .clk        ( clk_74a ),
     .reset_n    ( reset_n ),
     .cont1_key  ( cont1_key ),

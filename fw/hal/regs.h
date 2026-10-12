@@ -124,6 +124,8 @@ static const unsigned AP_AP_LEN[4] = { 142, 107, 379, 277 };
 #define CR_RTC_EPOCH     11
 #define CR_TICK_LO       12
 #define CR_TICK_HI       13
+#define CR_TICK_DONE     14  /* CPU write: this tick's composer work is done, render its samples */
+#define CR_TICK_CYCLES   15  /* RO, hardware: CPU cycles used by the previous tick (diagnostic) */
 /* status written by the composer, read by video/bridge */
 #define CR_ST_STATE      16
 #define CR_ST_MODE       17

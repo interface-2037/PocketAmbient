@@ -1,5 +1,7 @@
 Ambient Pocket
 
 Generative ambient music, indefinitely: DRIFT, TIDES, HUSH and MOTHER.
-Phase 0 build: 440 Hz test tone and title screen.
+Phase 4 test build: the composer runs on the Pocket (PicoRV32 soft CPU) and plays
+DRIFT, TIDES, HUSH and MOTHER live. A starts / stops, Left / Right changes mode,
+B reseeds. The screen shows engine diagnostics; the real UI comes in Phase 5.
 Based on the openFPGA core template (https://github.com/open-fpga/core-template).

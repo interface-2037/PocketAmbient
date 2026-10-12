@@ -21,6 +21,13 @@ jobs:
         run: python tools/gen_tables.py && git diff --exit-code
       - name: Build + unit tests
         run: make test
+      - name: Firmware (RV32IMC) on the instruction-set simulator == host render
+        run: |
+          sudo apt-get install -y lld
+          make build/render build/rvsim
+          make fw PYTHON=python
+          tools/check_fw.sh 10 build/fw/composer.bin
+          tools/check_fw.sh 10
       - name: Long unit tests (nightly)
         if: github.event_name == 'schedule'
         run: ./build/tests --long
@@ -35,5 +42,13 @@ jobs:
         with:
           name: reports
           path: reports/
-  # Phase 2+: Verilator module and full-system sims, RISC-V firmware build.
+  rtl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get install -y verilator
+      - name: Full system (CPU + firmware + engine) == host render, 2 s per mode
+        run: make build/render && FAST=1 sim/run_sys.sh 2
   # Quartus builds need a self-hosted runner (see README).

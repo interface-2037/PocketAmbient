@@ -3,6 +3,7 @@
 #   make render    10-minute excerpt per mode into renders/
 #   make analyze   run tools/analyze_audio.py on renders/
 #   make tables    regenerate lookup tables (needs Python)
+#   make fw        composer firmware for the PicoRV32 (clang + lld) -> src/fpga/core/cpu/composer.hex
 #   make fpga      Quartus build (src/fpga)   make package  SD-card layout + zip in dist/
 # On Windows use mingw32-make, after `source tools/env.sh` (Git Bash) or tools\env.ps1.
 
@@ -23,8 +24,9 @@ HEADERS  := $(wildcard fw/composer/*.h fw/hal/*.h model/*.h)
 RENDER := $(BUILD)/render$(EXE)
 TESTS  := $(BUILD)/tests$(EXE)
 FUZZ   := $(BUILD)/fuzz$(EXE)
+RVSIM  := $(BUILD)/rvsim$(EXE)
 
-.PHONY: all test render analyze tables clean fpga package
+.PHONY: all test render analyze tables clean fpga package fw
 .DEFAULT_GOAL := all
 
 QUARTUS_BIN ?= /c/altera_lite/25.1std/quartus/bin64
@@ -34,7 +36,7 @@ fpga:
 package:
 	$(PYTHON) tools/package.py
 
-all: $(RENDER) $(TESTS) $(FUZZ)
+all: $(RENDER) $(TESTS) $(FUZZ) $(RVSIM)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -44,6 +46,9 @@ $(RENDER): model/render.c $(COMPOSER) $(MODEL) $(HEADERS) | $(BUILD)
 
 $(TESTS): tests/test_main.c $(wildcard tests/*.c) $(COMPOSER) $(MODEL) $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -Itests -o $@ $(wildcard tests/*.c) $(COMPOSER) $(MODEL)
+
+$(RVSIM): model/rvsim.c model/synth_model.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ model/rvsim.c model/synth_model.c
 
 $(FUZZ): model/fuzz.c model/synth_model.c $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ model/fuzz.c model/synth_model.c
@@ -63,6 +68,31 @@ analyze:
 
 tables:
 	$(PYTHON) tools/gen_tables.py
+
+# ---- composer firmware (RV32IMC, freestanding; DECISIONS D48)
+RV_CC     ?= clang
+RV_LD     ?= ld.lld
+RV_OBJCOPY ?= llvm-objcopy
+RV_CFLAGS := --target=riscv32-unknown-elf -march=rv32imc -mabi=ilp32 -Os -ffreestanding -fno-builtin \
+             -fno-common -ffunction-sections -std=c11 -Wall -Wextra -Wno-unused-const-variable \
+             -Wno-unused-function
+FW_SRCS   := fw/rv/crt0.S fw/rv/main.c fw/rv/rt.c fw/hal/hal_mmio.c $(COMPOSER)
+FW_OBJS   := $(patsubst %,$(BUILD)/fw/%.o,$(FW_SRCS))
+FW_ELF    := $(BUILD)/fw/composer.elf
+FW_HEX    := src/fpga/core/cpu/composer.hex
+
+$(BUILD)/fw/%.o: % $(HEADERS) fw/rv/link.ld
+	@mkdir -p $(dir $@)
+	$(RV_CC) $(RV_CFLAGS) -c $< -o $@
+
+$(FW_ELF): $(FW_OBJS) fw/rv/link.ld
+	$(RV_LD) -m elf32lriscv -T fw/rv/link.ld --gc-sections -Map $(BUILD)/fw/composer.map -o $@ $(FW_OBJS)
+
+$(BUILD)/fw/composer.bin: $(FW_ELF)
+	$(RV_OBJCOPY) -O binary $< $@
+
+fw: $(BUILD)/fw/composer.bin
+	$(PYTHON) tools/fw_hex.py $< $(FW_HEX)
 
 clean:
 	rm -rf $(BUILD)
