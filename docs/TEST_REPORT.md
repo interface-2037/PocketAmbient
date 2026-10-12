@@ -1,5 +1,19 @@
 # Test report
 
+## v0.4.4 on hardware (2026-10-12)
+
+Build on the PC (Quartus Lite 25.1std). The default fitter seed missed hold by −0.044 ns (fast 1100 mV 0 °C, `ve_interp:u_isawA` c2 → fr, logic unchanged since v0.4.1). A refit with `--seed=3` and no source change met every corner: worst setup +1.723 ns, worst hold +0.111 ns, 12,115 ALMs (66 %), 301 / 308 M10K. Tested as the dev package.
+
+| Step (v0.4.4 `HW_TEST_NEXT.md`) | Result |
+|---|---|
+| 1. Power-cycle, version 0.4.4 | **pass** |
+| 2. Button changes (Density via Down, Brightness via L/R, Mode via Left/Right) survive a power cycle; menu shows the same values | **pass** |
+| 3. A menu change (Reverb High) survives a power cycle | **pass** |
+| 4. Lock Seed on: same seed after a power cycle | **pass** |
+| 5. Files on the card after the last power-off | `ambient.sav`: 32 bytes, magic `AMBS`, format 1, Lock 1, seed `FD5ADEF7`, settings MOTHER / Density 4 / Brightness 1 / Reverb Low, check word valid. `interact_persist.json`: Mode 1 (stale APF menu cache), Density 4, Brightness 1, Lock 1. The `.sav` takes precedence at a cold start (D59), so the stale menu mode does not matter. |
+
+**All core-menu persistence items from D51 are resolved on hardware.** Phases 4–5 are complete.
+
 ## v0.4.4: settings from ambient.sav at a cold start (simulation, 2026-10-12)
 
 **A. v0.4.3 on hardware (user, 2026-10-12)**
