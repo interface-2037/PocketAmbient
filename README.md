@@ -18,9 +18,9 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 | 0: template + hello tone on hardware | done; v0.1.0 tested on hardware (2026-10-10) |
 | 1: C model + composer + renderer | done; signed off after listening round 3 (2026-10-10) |
 | 2: voice engine RTL | done; bit-exact vs the C model (Icarus) |
-| 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12), one open item: tick overruns (docs/TEST_REPORT.md) |
-| **4: CPU integration** | **done in simulation** (bit-exact ISS + full-system RTL, SD firmware loading); hardware test with v0.4.0 |
-| **5: controls, menu, video** | **done in simulation:** core menu (D51) and the per-mode screens (D52); v0.4.0 hardware test next |
+| 3: FX + SRAM | done; v0.2.3 engine test on hardware (2026-10-12); tick spacing confirmed on hardware with v0.4.0 |
+| 4: CPU integration | done; v0.4.0 tested on hardware (2026-10-11), firmware from the SD card works |
+| 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11). Open: HUSH BPM readout when stopped (docs/TEST_REPORT.md) |
 | 6: timing closure, soak | not started |
 
 ## Layout
@@ -107,5 +107,5 @@ Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/
 ## Known limitations
 
 - v0.4.0 is the first build with everything: live composer, buttons, core menu and the per-mode screens. Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the CPU stopped.
-- Known issue from Phase 3: the frame-tick overrun counter saturated on hardware (docs/TEST_REPORT.md). v0.3.0 measures the frame-tick spacing directly.
+- HUSH's BPM readout shows a garbage value on the title screen after a mode change while stopped (display only; docs/TEST_REPORT.md).
 - The host renderer runs at ~90–140× realtime (spec target 200×). See docs/DECISIONS.md D14.

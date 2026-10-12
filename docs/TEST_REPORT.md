@@ -1,5 +1,22 @@
 # Test report
 
+## Phases 4–5: v0.4.0 on hardware (2026-10-11)
+
+Build: Quartus Lite 25.1std on Windows (`build/fpga_v040.log`, 15 min). **Fit:** 11,740 ALMs (64 %), 15,581 registers, 301 / 308 M10K (98 %), 26 DSP, 224 / 224 pins. **Timing met in every corner:** worst setup slack +0.209 ns (`clk_74a`, slow 1100 mV 0 °C; +0.848 ns at 85 °C), worst hold +0.062 ns. Tested as the **dev** package (`AmbientPocket-0.4.0-dev.zip`: firmware loaded from `Assets/ambient/common/composer.bin`, 47,452 bytes).
+
+Result from the user: **everything looks and sounds great**, apart from two HUSH notes below (preferences, not failures).
+
+| Check | Result |
+|---|---|
+| Firmware loaded from the SD data slot (D50): slot location and bridge byte order | **pass**: core boots and plays, no red (CPU fault) screen |
+| All four modes play, with their screens (D52) | **pass** (HUSH and MOTHER screenshots taken) |
+| Info overlay (Y) after 7:59 of play, MOTHER | CPU MAX **231,138** cycles (sim estimate 231k), FIFO MIN **513** of 1024 (never below the 512-frame prime), UNDERRUN **0**, FRAME **1546–1547** |
+
+- **Phase 3 tick question settled:** on hardware the LRCK-derived frame tick is spaced 1546–1547 `clk_74a` cycles, exactly as simulated, and the FIFO never underran. The saturated overrun counter in v0.2.3 was not caused by irregular ticks; that build's overrun logic is gone with `engine_test.sv`.
+- **Feedback for later (HUSH):**
+  1. **BPM readout overflows when stopped:** it showed "11566", overlapping the "BPM" label. Cause: changing mode while stopped (`do_switch`, `fw/composer/composer.c`) only changes `c->mode`; the per-mode state is a union (`c->m`), so the HUSH screen reads the previous mode's state as `hush_t` until HUSH starts. Display only. Fix options: blank the mode-specific readouts on the title screen in `fw/ui/ui.c`, or clear `c->m` on a stopped mode switch (composer change: check `rvsim` vs `render` stays bit-identical).
+  2. **Audible crackle:** the user believes it is the intended vinyl crackle (D27, thinned in D34 to ~4 pops/s), and 0 underruns supports that. Revisit its level in a music pass.
+
 ## Phase 5: menu and screens, simulation (2026-10-12)
 
 | Check | Result |
