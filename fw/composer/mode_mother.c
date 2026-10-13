@@ -2,19 +2,24 @@
  * mode_mother.c - MOTHER: inside the Nostromo. No music, no score: machinery.
  *
  *  Tone set from the user's reference clip (see the tables below).
- *  - Machinery hum: seven sine partials at the clip's frequencies and levels,
- *    swelling slowly.
+ *  - Machinery hum: seven sine partials at the clip's frequencies and levels
+ *    (each slowly beating against a detuned twin) over a low noise rumble,
+ *    building and receding over tens of seconds.
  *  - Coolant / pipe flow: two resonant noise beds whose resonances and levels
  *    wander slowly (seconds-long slews), with occasional gurgles (short bursts
  *    of bubbly resonant noise at random low pitches).
- *  - Relays: sharp ~1-2 ms double clicks (close, then a bounce 6-15 ms later),
+ *  - Relays: dull ~1-2 ms double clicks (close, then a bounce 6-15 ms later),
  *    in small clusters.
  *  - Servos / motors: a pulse-wave whine that glides up, holds, and glides back
  *    down over 0.3-2 s.
  *  - Disk / tape drives: a spin-up whir (40 Hz up), bursts of rapid seek ticks, a spin-down.
- *  - Thermal ticks: sparse, quiet metallic pings (short inharmonic FM).
- *  - Data blips: the clip's 2.3-2.85 kHz square blips, 35-50 ms, ~90 ms apart,
- *    in 1-2 s runs, with readout ticks ~50 ms apart riding along.
+ *  - Thermal ticks: rare, very quiet metallic pings (short inharmonic FM).
+ *  - Data chirrs: the clip's beep gesture - near-pure sine pulses 20 per second
+ *    (25-35 ms each) at one pitch (or two alternating), fading out over the last
+ *    ~0.6 s, with readout ticks riding along. Pitches 1.55-2.2 kHz (the clip's
+ *    2.63 kHz was too piercing). Single quiet tones now and then in between.
+ *  - Vent hiss: a rare 1-2 s broadband air release.
+ *  - Clunks: a rare heavy low thump (falling sine + dark noise).
  *  - Motion tracker: a very rare event (~1-4 h apart): pings speed up and rise
  *    as `distance` closes, ending in rapid beeping.
  *
@@ -25,25 +30,22 @@
 #include "cint.h"
 
 #define O (c->m.o)
-#define O_BUDGET 22
-#define TRIM     14345               /* loudness calibration (-21.5 LUFS) */
+#define O_BUDGET 24
+#define TRIM     44900               /* loudness calibration (-21.5 LUFS) */
 #define AQ(x)    ((int32_t)((x) * 32768))
 
 /* Tone set measured from the reference clip (MOTHER.wav, 2026-10-10):
  * - hum partials (Hz, dB rel. 131.9 Hz): 131.9 0, 115.7 -4.9, 149.4 -5.7, 205.9 -7.3,
  *   87.5 -8.8, 57.9 -17.9, 49.8 -25.9; 263.8 Hz (2nd harmonic of 131.9) -18
- * - blips: 2.3-2.85 kHz, 40-100 ms long, ~90 ms apart, runs of 1-2 s, ticks ~50 ms apart
+ * - beeps: near-pure sines (3rd harmonic -40 dB, 2nd -27 dB), pulsed 20/s in one ~1 s
+ *   chirr that fades out; a few quiet single tones at other pitches
+ * - a broadband vent hiss (~1.5 s) and one heavy low clunk
  * - little above 5 kHz, near-mono (L/R correlation 0.93) */
 static const int32_t HUM_CENTS[7] = {4814, 4587, 5030, 5585, 4104, 3389, 3128};
 static const int32_t HUM_AMP[7]   = {5400, 3070, 2800, 2330, 1960, 680, 280};
-static const int32_t G_LO[M_GENS]   = {9862, 9862, 9900};          /* 2.44-2.8 kHz, the clip's tones */
-static const int32_t G_HI[M_GENS]   = {10100, 10100, 10080};
-static const int32_t G_W[M_GENS]    = {16384, 16384, 12000};
-static const int32_t G_LMIN[M_GENS] = {35, 35, 40};
-static const int32_t G_LMAX[M_GENS] = {50, 50, 70};
-static const int32_t G_AMP[M_GENS]  = {8400, 6600, 5400};
-static const int32_t G_PAN[M_GENS]  = {14000, 16384, 18800};
-static const int32_t G_ON[M_GENS]   = {AQ(0.20), AQ(0.55), AQ(0.80)};
+#define BEEP_LO   9050             /* ~1.55 kHz */
+#define BEEP_HI   9686             /* ~2.2 kHz: the clip's 2.63 kHz was too high */
+#define TONE_LO   8700             /* ~1.25 kHz */
 
 static int role(comp_t *c, int *slot) { return role_alloc(slot, c->gen, 0, AP_KS_FIRST - 1, O_BUDGET); }
 static int owned(comp_t *c, int v) { return v >= 0 && g_vinfo[v].owner == c->gen; }
@@ -71,7 +73,7 @@ static void click_patch(comp_t *c, int v, uint32_t hz)
 {
     vparams_t p = {0};
     p.algo = ALGO_NOISE; p.noise = NOISE_PINK; p.fmode = FMODE_LP;
-    p.cutoff = svf_coef_hz(hz); p.reso = 9000;
+    p.cutoff = svf_coef_hz(hz); p.reso = 18000;            /* dull, not ringing */
     p.attack = env_attack_ms(0); p.decay = env_decay_ms(1); p.sustain = 0;
     p.release = env_release_ms(2);
     p.amp = 4000; p.pan = c_pan_rand(c, 2250); p.send_rev = 4000; p.send_echo = 1000;
@@ -151,7 +153,7 @@ static void relay_tick(comp_t *c)
         O.relay_left = (uint8_t)prng_range(&c->r_rhythm, 1, 4);         /* a small cluster */
         for (int i = 0; i < 2; i++)
             if (!owned(c, O.relay_v[i]) && role(c, &O.relay_v[i]) >= 0)
-                click_patch(c, O.relay_v[i], (uint32_t)prng_range(&c->r_timbre, 2800, 3800));
+                click_patch(c, O.relay_v[i], (uint32_t)prng_range(&c->r_timbre, 1000, 2000));
     }
     if (owned(c, O.relay_v[0])) {
         hal_vwrite((unsigned)O.relay_v[0], VR_AMP, (uint32_t)prng_range(&c->r_timbre, 4000, 7000));
@@ -242,9 +244,9 @@ static void drive_tick(comp_t *c)
         p.algo = ALGO_PAD; p.wave = 9000;
         p.pinc0 = pitch_inc(2750); p.pinc1 = pitch_inc(2756);           /* ~40 Hz */
         p.fmode = FMODE_LP; p.cutoff = svf_coef_hz(700); p.reso = 20000;
-        p.attack = env_attack_ms(600); p.decay = env_decay_ms(1000); p.sustain = 32768;
+        p.attack = env_attack_ms(1500); p.decay = env_decay_ms(1000); p.sustain = 32768;
         p.release = env_release_ms(800);
-        p.amp = 3500; p.pan = c_pan_rand(c, 2000); p.send_rev = 8000;
+        p.amp = 2000; p.pan = c_pan_rand(c, 2000); p.send_rev = 8000;
         voice_setup((int)v, &p);
         trigger(c, O.drive_v, 2750, SEC(40));
         int32_t spin = prng_range(&c->r_rhythm, 1200, 2500);
@@ -252,7 +254,7 @@ static void drive_tick(comp_t *c)
         hal_vwrite(v, VR_GLIDE, slew_code((uint32_t)spin));
         hal_vwrite(v, VR_PINC0, pitch_inc(top));
         hal_vwrite(v, VR_PINC1, pitch_inc(top + 6));
-        if (!owned(c, O.seek_v) && role(c, &O.seek_v) >= 0) click_patch(c, O.seek_v, 2400);
+        if (!owned(c, O.seek_v) && role(c, &O.seek_v) >= 0) click_patch(c, O.seek_v, 1800);
         O.drive_phase = 1;
         O.drive_next = spin;
         return;
@@ -288,7 +290,7 @@ static void therm_tick(comp_t *c)
     int *slot = &O.therm_v[O.therm_i];
     O.therm_i ^= 1;
     if (role(c, slot) >= 0) {
-        int32_t cents = prng_range(&c->r_timbre, 9500, 10900);          /* ~2-4.5 kHz */
+        int32_t cents = prng_range(&c->r_timbre, 8400, 9300);           /* ~1-1.75 kHz */
         vparams_t q = {0};
         q.algo = ALGO_FM;
         q.pinc0 = pitch_inc(cents);
@@ -297,97 +299,149 @@ static void therm_tick(comp_t *c)
         q.fm_index = 400; q.fm_sus = 40; q.mod_decay = env_decay_ms(60);
         q.attack = env_attack_ms(1); q.decay = env_decay_ms((uint32_t)prng_range(&c->r_timbre, 150, 350));
         q.sustain = 0; q.release = env_release_ms(200);
-        q.fmode = FMODE_LP; q.cutoff = svf_coef_hz(4500); q.reso = 24000;
-        q.amp = (uint32_t)prng_range(&c->r_timbre, 900, 2200);
+        q.fmode = FMODE_LP; q.cutoff = svf_coef_hz(3000); q.reso = 24000;
+        q.amp = (uint32_t)prng_range(&c->r_timbre, 400, 1000);
         q.pan = c_pan_rand(c, 3750); q.send_rev = 7000; q.send_echo = 2500;
         voice_setup(*slot, &q);
         trigger(c, *slot, cents, SEC(3));
         voice_off(*slot);                                 /* gate 0: the decay does the rest */
     }
-    O.therm_next = wait_ms(c, 9000, 5000, 600);
+    O.therm_next = wait_ms(c, 20000, 10000, 2000);
 }
 
-/* ------------------------------------------------------------- data blips */
+/* ------------------------------------------------------------- data beeps */
 
-static int governor_ok(comp_t *c) { return O.burst <= (O.recent >> 1) + (3u << 16); }
-
-static void gen_patch(comp_t *c, int g)
+/* near-pure sine (+ a -27 dB 2nd harmonic, as in the clip) with soft 2-3 ms edges */
+static void beep_patch(comp_t *c, int v, int32_t cents, uint32_t amp, uint32_t pan)
 {
-    if (role(c, &O.gen_v[g]) < 0) return;
+    (void)c;
     vparams_t p = {0};
-    p.algo = ALGO_PULSE;
-    p.wave = (uint32_t)G_W[g];
-    p.pinc0 = p.pinc1 = pitch_inc(O.gen_set[g][0]);
-    p.fmode = FMODE_LP; p.cutoff = svf_coef_hz(6500); p.reso = 23000;     /* square; wavetables stop at 15 kHz */
-    p.attack = env_attack_ms(1); p.decay = env_decay_ms(1000); p.sustain = 32768;
-    p.release = env_release_ms(12);
-    p.amp = (uint32_t)G_AMP[g]; p.pan = (uint32_t)G_PAN[g];
-    p.send_rev = 5000; p.send_echo = 3000;
-    voice_setup(O.gen_v[g], &p);
+    p.algo = ALGO_SUB; p.wave = 1500;
+    p.pinc0 = pitch_inc(cents); p.pinc1 = pitch_inc(cents + 1200);
+    p.fmode = FMODE_LP; p.cutoff = svf_coef_hz(5000); p.reso = 32767;
+    p.attack = env_attack_ms(2); p.decay = env_decay_ms(1000); p.sustain = 32768;
+    p.release = env_release_ms(3);
+    p.amp = amp; p.pan = pan;
+    p.send_rev = 9000; p.send_echo = 2500;
+    p.slew = slew_code(1);                                /* per-pulse level steps */
+    voice_setup(v, &p);
 }
 
 static void rtick(comp_t *c)
 {
     if (!owned(c, O.rtick_v)) {
         if (role(c, &O.rtick_v) < 0) return;
-        click_patch(c, O.rtick_v, 3600);
+        click_patch(c, O.rtick_v, 2000);
     }
-    hal_vwrite((unsigned)O.rtick_v, VR_AMP, (uint32_t)prng_range(&c->r_timbre, 4000, 7000));
+    hal_vwrite((unsigned)O.rtick_v, VR_AMP, (uint32_t)prng_range(&c->r_timbre, 1500, 3000));
     trigger(c, O.rtick_v, 0, SEC(2));
     O.rtick_off = 2;
-}
-
-static void gen_tick(comp_t *c, int g)
-{
-    if (O.gen_off[g] > 0 && --O.gen_off[g] == 0) off(c, O.gen_v[g]);
-    if (--O.gen_next[g] > 0) return;
-    int32_t a = O.activity;
-    if (O.gen_left[g] > 0 && !governor_ok(c)) {
-        O.gen_left[g] = 0;
-        O.gen_next[g] = prng_range(&c->r_rhythm, 300, 900);
-        return;
-    }
-    if (O.gen_left[g] > 0) {                             /* next blip of the run */
-        if (!owned(c, O.gen_v[g])) gen_patch(c, g);
-        if (!owned(c, O.gen_v[g])) { O.gen_left[g] = 0; O.gen_next[g] = 500; return; }
-        int32_t cents = O.gen_loop[g] ? O.gen_pat[g][O.gen_pos[g]++ % O.gen_loop[g]]
-                                      : O.gen_set[g][prng_below(&c->r_harm, O.gen_n[g])];
-        hal_vwrite((unsigned)O.gen_v[g], VR_PINC0, pitch_inc(cents));
-        trigger(c, O.gen_v[g], cents, SEC(5));
-        O.recent += 65536;
-        O.burst += 65536;
-        /* clip timing: 35-50 ms blips ~90 ms apart; now and then one held ~0.4 s */
-        int held = prng_chance(&c->r_form, 5243);
-        int32_t len = held ? prng_range(&c->r_rhythm, 300, 500) : prng_range(&c->r_rhythm, G_LMIN[g], G_LMAX[g]);
-        O.gen_off[g] = len;
-        O.gen_next[g] = held ? len + prng_range(&c->r_rhythm, 60, 120) : prng_range(&c->r_rhythm, 75, 105);
-        if (g == 0) { rtick(c); O.rtick_next = prng_range(&c->r_rhythm, 42, 55); }   /* ticks ~50 ms apart */
-        O.gen_left[g]--;
-        return;
-    }
-    if (a < G_ON[g]) {                                    /* idle: generator 0 runs a short sequence now and then */
-        O.gen_left[g] = (int16_t)(g == 0 ? prng_range(&c->r_rhythm, 3, 6) : 0);
-        O.gen_loop[g] = 0;
-        O.gen_next[g] = g == 0 ? prng_range(&c->r_rhythm, 10000, 25000) : 1000;
-        return;
-    }
-    int32_t busy = clampi((a - G_ON[g]) * 2, 0, 32767);
-    O.gen_left[g] = (int16_t)clampi(8 + mul_q15(busy, 12) + prng_range(&c->r_rhythm, -2, 2), 4, 22);   /* 1-2 s runs */
-    int32_t cap = 4 + (int32_t)(O.recent >> 16) / 4;
-    if (O.gen_left[g] > cap) O.gen_left[g] = (int16_t)cap;
-    O.gen_loop[g] = 0;
-    if (prng_chance(&c->r_form, (uint32_t)(9000 + busy / 3))) {   /* "processing": a short loop */
-        O.gen_loop[g] = (uint8_t)prng_range(&c->r_harm, 3, 4);
-        O.gen_pos[g] = 0;
-        for (int i = 0; i < O.gen_loop[g]; i++) O.gen_pat[g][i] = O.gen_set[g][prng_below(&c->r_harm, O.gen_n[g])];
-    }
-    O.gen_next[g] = prng_range(&c->r_rhythm, 2000, 7000 - mul_q15(busy, 3500));   /* runs every ~2-7 s */
 }
 
 static void rtick_tick(comp_t *c)
 {
     if (O.rtick_off > 0 && --O.rtick_off == 0) off(c, O.rtick_v);
-    if (O.rtick_next > 0 && --O.rtick_next == 0) rtick(c);
+}
+
+/* a chirr: 15-25 pulses 50 ms apart, full level, then ~11 dB of fade over the last 12 */
+static void chirr_tick(comp_t *c)
+{
+    if (O.chirr_off > 0 && --O.chirr_off == 0) off(c, O.chirr_v);
+    if (--O.chirr_next > 0) return;
+    if (O.chirr_left <= 0) {                              /* start a chirr */
+        if (role(c, &O.chirr_v) < 0) { O.chirr_next = 2000; return; }
+        int32_t cents = (prng_range(&c->r_harm, BEEP_LO, BEEP_HI) / 25) * 25;
+        O.chirr_cents[0] = O.chirr_cents[1] = cents;
+        if (prng_chance(&c->r_form, 11500))               /* ~35%: two alternating pitches */
+            O.chirr_cents[1] = clampi(cents - (prng_range(&c->r_harm, 150, 500) / 25) * 25, TONE_LO, BEEP_HI);
+        O.chirr_amp = prng_range(&c->r_timbre, 2800, 4000);
+        beep_patch(c, O.chirr_v, cents, (uint32_t)O.chirr_amp, (uint32_t)c_pan_rand(c, 1500));
+        O.chirr_n = O.chirr_left = (int16_t)prng_range(&c->r_rhythm, 15, 25);
+    }
+    if (owned(c, O.chirr_v)) {
+        unsigned v = (unsigned)O.chirr_v;
+        int k = O.chirr_n - O.chirr_left;                 /* pulse index */
+        if (O.chirr_left <= 12) O.chirr_amp = mul_q15(O.chirr_amp, 29500);
+        int32_t cents = O.chirr_cents[k & 1];
+        hal_vwrite(v, VR_PINC0, pitch_inc(cents));
+        hal_vwrite(v, VR_PINC1, pitch_inc(cents + 1200));
+        hal_vwrite(v, VR_AMP, (uint32_t)O.chirr_amp);
+        trigger(c, O.chirr_v, cents, SEC(2));
+        O.chirr_off = prng_range(&c->r_rhythm, 25, 35);
+        if (k < 8 && !(k & 1)) rtick(c);                  /* readout ticks on the loud part */
+    }
+    if (--O.chirr_left > 0) O.chirr_next = 50;
+    else O.chirr_next = wait_ms(c, 75000, 15000, 6000);
+}
+
+/* now and then a single quiet tone at another pitch; rarely a held one (~0.4 s) */
+static void tone_tick(comp_t *c)
+{
+    if (O.tone_off > 0 && --O.tone_off == 0) off(c, O.tone_v);
+    if (--O.tone_next > 0) return;
+    O.tone_next = wait_ms(c, 40000, 12000, 3000);
+    if (role(c, &O.tone_v) < 0) return;
+    int32_t cents = (prng_range(&c->r_harm, TONE_LO, BEEP_HI) / 25) * 25;
+    uint32_t amp = (uint32_t)prng_range(&c->r_timbre, 700, 1300);   /* one draw per statement: */
+    beep_patch(c, O.tone_v, cents, amp, (uint32_t)c_pan_rand(c, 3000));  /* gcc/clang arg order differs */
+    trigger(c, O.tone_v, cents, SEC(2));
+    O.tone_off = prng_chance(&c->r_form, 6500) ? prng_range(&c->r_rhythm, 300, 500)
+                                               : prng_range(&c->r_rhythm, 35, 60);
+}
+
+/* ------------------------------------------------------- vent hiss / clunk */
+
+static void vent_tick(comp_t *c)
+{
+    if (O.vent_off > 0 && --O.vent_off == 0) off(c, O.vent_v);
+    if (--O.vent_next > 0) return;
+    O.vent_next = wait_ms(c, 200000, 70000, 30000);
+    if (role(c, &O.vent_v) < 0) return;
+    vparams_t p = {0};
+    p.algo = ALGO_NOISE; p.noise = NOISE_PINK; p.fmode = FMODE_LP;    /* LP: 12 dB/oct keeps it out of the top octave */
+    p.cutoff = svf_coef_hz((uint32_t)prng_range(&c->r_timbre, 2500, 4000)); p.reso = 26000;
+    p.attack = env_attack_ms((uint32_t)prng_range(&c->r_timbre, 150, 500));
+    p.decay = env_decay_ms(1000); p.sustain = 32768;
+    p.release = env_release_ms((uint32_t)prng_range(&c->r_timbre, 500, 1000));
+    p.amp = (uint32_t)prng_range(&c->r_timbre, 2500, 4000);
+    p.pan = c_pan_rand(c, 4000); p.send_rev = 9000;
+    voice_setup(O.vent_v, &p);
+    trigger(c, O.vent_v, 0, SEC(5));
+    O.vent_off = prng_range(&c->r_rhythm, 600, 1400);
+}
+
+static void clunk_tick(comp_t *c)
+{
+    if (O.clunk_off > 0 && --O.clunk_off == 0) { off(c, O.clunk_v[0]); off(c, O.clunk_v[1]); }
+    if (--O.clunk_next > 0) return;
+    O.clunk_next = wait_ms(c, 180000, 60000, 20000);
+    uint16_t pan = c_pan_rand(c, 2500);
+    if (role(c, &O.clunk_v[0]) >= 0) {                    /* falling low sine: the weight */
+        vparams_t q = {0};
+        int32_t cents = prng_range(&c->r_timbre, 2900, 3500);            /* ~45-60 Hz */
+        q.algo = ALGO_SUB; q.fmode = FMODE_BYPASS; q.reso = 32767;
+        q.pinc0 = pitch_inc(cents);
+        q.penv = pitch_inc(cents + 1200) - pitch_inc(cents);              /* starts an octave up */
+        q.mod_decay = env_decay_ms(90);
+        q.attack = env_attack_ms(1); q.decay = env_decay_ms(450); q.sustain = 0;
+        q.release = env_release_ms(300);
+        q.amp = (uint32_t)prng_range(&c->r_timbre, 10000, 15000);
+        q.pan = pan; q.send_rev = 9000;
+        voice_setup(O.clunk_v[0], &q);
+        trigger(c, O.clunk_v[0], cents, SEC(3));
+    }
+    if (role(c, &O.clunk_v[1]) >= 0) {                    /* dark noise: the impact */
+        vparams_t q = {0};
+        q.algo = ALGO_NOISE; q.noise = NOISE_PINK; q.fmode = FMODE_LP;
+        q.cutoff = svf_coef_hz((uint32_t)prng_range(&c->r_timbre, 250, 500)); q.reso = 20000;
+        q.attack = env_attack_ms(1); q.decay = env_decay_ms(160); q.sustain = 0;
+        q.release = env_release_ms(120);
+        q.amp = (uint32_t)prng_range(&c->r_timbre, 7000, 11000);
+        q.pan = pan; q.send_rev = 10000;
+        voice_setup(O.clunk_v[1], &q);
+        trigger(c, O.clunk_v[1], 0, SEC(3));
+    }
+    O.clunk_off = 30;
 }
 
 /* ------------------------------------------------------------------- hum */
@@ -399,17 +453,30 @@ static void hum_start(comp_t *c)
         vparams_t p = {0};
         p.algo = ALGO_SUB;
         p.pinc0 = pitch_inc(HUM_CENTS[i]);
-        p.pinc1 = pitch_inc(HUM_CENTS[i] + 1200);
-        p.wave = i == 0 ? 4100 : 0;                       /* 263.8 Hz harmonic at -18 dB */
+        if (i == 0) { p.pinc1 = pitch_inc(HUM_CENTS[i] + 1200); p.wave = 4100; }   /* 263.8 Hz harmonic, -18 dB */
+        else { p.pinc1 = pitch_inc(HUM_CENTS[i] + prng_range(&c->r_timbre, 3, 8)); p.wave = 9000; }  /* slow beating */
+        p.vib_rate = (uint32_t)prng_range(&c->r_timbre, 600, 1400) * 89478u / 1000u;     /* ~1 Hz wobble */
+        p.vib_depth = 60;
         p.fmode = FMODE_BYPASS; p.reso = 32767;
         p.attack = env_attack_ms(6000); p.decay = env_decay_ms(1000); p.sustain = 32768;
         p.release = env_release_ms(6000);
-        p.amp = (uint32_t)(HUM_AMP[i] / 3);
+        p.amp = (uint32_t)mul_q15(HUM_AMP[i], O.hum_g);       /* re-articulate at the current level */
         p.pan = (uint32_t)(16384 + (i & 1 ? 1200 : -1200));
         p.send_rev = 5000;
         p.slew = slew_code(5000);
         voice_setup(O.hum_v[i], &p);
         trigger(c, O.hum_v[i], HUM_CENTS[i], MIN(40));
+    }
+    if (role(c, &O.rumble_v) >= 0) {                      /* the clip's hum sits on a noisy floor */
+        vparams_t p = {0};
+        p.algo = ALGO_NOISE; p.noise = NOISE_PINK; p.fmode = FMODE_BP;
+        p.cutoff = svf_coef_hz(110); p.reso = 22000;
+        p.attack = env_attack_ms(6000); p.decay = env_decay_ms(1000); p.sustain = 32768;
+        p.release = env_release_ms(6000);
+        p.amp = (uint32_t)mul_q15(3000, O.hum_g); p.pan = 16384; p.send_rev = 5000;
+        p.slew = slew_code(5000);
+        voice_setup(O.rumble_v, &p);
+        trigger(c, O.rumble_v, 0, MIN(40));
     }
     O.hum_left = prng_range(&c->r_form, MIN(20), MIN(30));
     O.hum_next = 6000;
@@ -419,9 +486,11 @@ static void hum_tick(comp_t *c)
 {
     if (--O.hum_left <= 0) { hum_start(c); return; }
     if (--O.hum_next > 0) return;
-    /* slow swells, ~15 dB of range like the clip; louder when the system is busy */
-    int32_t g = clampi(prng_range(&c->r_timbre, 6000, 30000) + mul_q15(O.activity - AQ(0.5), 12000), 5000, 32767);
-    uint32_t slew = (uint32_t)prng_range(&c->r_rhythm, 3000, 8000);
+    /* slow builds and recessions over tens of seconds (~18 dB of range; the clip's hum rises further, but
+     * a deeper floor lets every other event jump out);
+     * louder when the system is busy */
+    int32_t g = clampi(prng_range(&c->r_timbre, 4000, 30000) + mul_q15(O.activity - AQ(0.5), 12000), 3000, 32767);
+    uint32_t slew = (uint32_t)prng_range(&c->r_rhythm, 8000, 20000);
     for (int i = 0; i < 7; i++) {
         if (!owned(c, O.hum_v[i])) continue;
         int32_t amp = mul_q15(HUM_AMP[i], g);
@@ -429,7 +498,12 @@ static void hum_tick(comp_t *c)
         hal_vwrite((unsigned)O.hum_v[i], VR_SLEW, slew_code(slew));
         hal_vwrite((unsigned)O.hum_v[i], VR_AMP, (uint32_t)amp);
     }
-    O.hum_next = (int32_t)slew + prng_range(&c->r_rhythm, 0, 3000);
+    O.hum_g = g;
+    if (owned(c, O.rumble_v)) {
+        hal_vwrite((unsigned)O.rumble_v, VR_SLEW, slew_code(slew));
+        hal_vwrite((unsigned)O.rumble_v, VR_AMP, (uint32_t)mul_q15(3000, g));
+    }
+    O.hum_next = (int32_t)slew + prng_range(&c->r_rhythm, 0, 5000);
 }
 
 /* --------------------------------------------------------- motion tracker */
@@ -500,22 +574,18 @@ static void mother_start(comp_t *c)
 {
     O.act_walk = 0;
     O.activity = AQ(0.45);
-    O.recent = 10u << 16;
-    O.burst = 0;
-    for (int i = 0; i < 2; i++) { O.flow_v[i] = -1; O.relay_v[i] = -1; O.therm_v[i] = -1; }
+    for (int i = 0; i < 2; i++) { O.flow_v[i] = -1; O.relay_v[i] = -1; O.therm_v[i] = -1; O.clunk_v[i] = -1; }
     O.gurgle_v = O.servo_v = O.drive_v = O.seek_v = O.ping_v = -1;
-    for (int g = 0; g < M_GENS; g++) {
-        O.gen_v[g] = -1;
-        O.gen_n[g] = (uint8_t)prng_range(&c->r_harm, 4, 8);
-        for (int i = 0; i < O.gen_n[g]; i++)                     /* 50-cent grid: not a musical scale */
-            O.gen_set[g][i] = (prng_range(&c->r_harm, G_LO[g], G_HI[g]) / 50) * 50;
-        O.gen_left[g] = 0;
-        O.gen_off[g] = 0;
-        O.gen_next[g] = prng_range(&c->r_rhythm, 3000, 9000);
-    }
+    O.chirr_v = O.tone_v = O.vent_v = O.rumble_v = -1;
+    O.chirr_left = 0; O.chirr_off = O.tone_off = O.vent_off = O.clunk_off = 0;
+    O.chirr_next = prng_range(&c->r_rhythm, 4000, 15000);
+    O.tone_next = prng_range(&c->r_rhythm, 8000, 25000);
+    O.vent_next = prng_range(&c->r_rhythm, 30000, 120000);
+    O.clunk_next = prng_range(&c->r_rhythm, 20000, 90000);
     for (int i = 0; i < 7; i++) O.hum_v[i] = -1;
     O.rtick_v = -1;
-    O.rtick_next = O.rtick_off = 0;
+    O.rtick_off = 0;
+    O.hum_g = 16384;
     hum_start(c);
     flow_start(c, 0);
     flow_start(c, 1);
@@ -543,8 +613,6 @@ static void mother_tick(comp_t *c)
                             O.act_walk + (c->density - 3) * 2500, 0, 32767);
         maybe_alert(c);
     }
-    O.recent -= O.recent >> 15;
-    O.burst -= O.burst >> 12;
     if (O.gurgle_step > 0 && --O.gurgle_step == 0) off(c, O.gurgle_v);
     hum_tick(c);
     rtick_tick(c);
@@ -555,7 +623,10 @@ static void mother_tick(comp_t *c)
     servo_tick(c);
     drive_tick(c);
     therm_tick(c);
-    for (int g = 0; g < M_GENS; g++) gen_tick(c, g);
+    chirr_tick(c);
+    tone_tick(c);
+    vent_tick(c);
+    clunk_tick(c);
     tracker_tick(c);
 }
 

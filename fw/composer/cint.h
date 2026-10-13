@@ -113,15 +113,15 @@ typedef struct {
     uint32_t wow_ph, wow_inc;
 } hush_t;
 
-#define M_GENS 3
 typedef struct {
     int32_t  activity;              /* system_activity, Q15: wanders slowly */
     int32_t  act_walk;
-    uint32_t recent, burst;         /* blip density governor, Q16 */
     /* machinery hum (partials measured from the reference clip) */
     int      hum_v[7];
     int32_t  hum_next, hum_left;
-    /* readout ticks that ride along with the blip runs */
+    int      rumble_v;              /* low noise rumble under the partials */
+    int32_t  hum_g;                 /* current hum level, Q15 */
+    /* readout ticks that ride along with the chirrs */
     int      rtick_v;
     int32_t  rtick_next, rtick_off;
     /* coolant / pipe flow beds and gurgles */
@@ -148,13 +148,14 @@ typedef struct {
     int      therm_v[2];
     uint8_t  therm_i;
     int32_t  therm_next;
-    /* data blips (now background only) */
-    int      gen_v[M_GENS];
-    int32_t  gen_set[M_GENS][8];    /* fixed pitch palette, cents */
-    uint8_t  gen_n[M_GENS], gen_loop[M_GENS], gen_pos[M_GENS];
-    int32_t  gen_pat[M_GENS][4];
-    int32_t  gen_next[M_GENS], gen_off[M_GENS];
-    int16_t  gen_left[M_GENS];
+    /* data beeps: chirrs (sine pulses 20/s, fading out) and single quiet tones */
+    int      chirr_v, tone_v;
+    int32_t  chirr_next, chirr_off, chirr_cents[2], chirr_amp;
+    int16_t  chirr_left, chirr_n;
+    int32_t  tone_next, tone_off;
+    /* vent hiss and heavy clunks */
+    int      vent_v, clunk_v[2];
+    int32_t  vent_next, vent_off, clunk_next, clunk_off;
     /* motion tracker */
     int      ping_v;
     int32_t  ping_next, ping_off, distance, approach, close_ms;
