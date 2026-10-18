@@ -1,5 +1,22 @@
 # Test report
 
+## v0.5.0 on hardware: sleep / wake (2026-10-18)
+
+Dev package `AmbientPocket-0.5.0-dev.zip` (Quartus Lite 25.1std, timing met, below). User test, `HW_TEST_NEXT.md` v0.5.0:
+
+| Step | Result |
+|---|---|
+| 1. Power-cycle, version 0.5.0 | **pass** |
+| 2. Sleep while playing (click at sleep?) | **pass** |
+| 3. Wake: the same piece fades in, same seed, settings and elapsed time carry on | **pass** |
+| 4. Sleep while stopped: wakes on the title, A plays the same seed | **pass** |
+| 5. Sleep timer keeps its deadline across a sleep | **pass** |
+| 6. Memories save, switch mode, load: crossfade back | **pass** |
+| 7. Full power-off still restores the settings from `ambient.sav` | **pass** |
+| 8. Files on the card | **pass** (decoded on the PC; Notepad shows a binary file as random CJK characters). `System/user_sleepstate.sta`, 628 bytes at 16:37: `01 'SPA'`, blob size 32, file size 628, strings `beingFar`, `AmbientPocket`, `0.5.0`, `composer.bin`, `ambient`, then from byte 596 the blob `414D5353 01000000 00000000 22976085 00002141 0 0 4DDDD08A`: format 1, unlocked, title (the last sleep was while stopped), session seed `22976085`, TIDES / density 4 / brightness 1 / reverb High, check word valid. `ambient.sav`, 32 bytes at 16:40: `AMBS`, format 1, check word valid, TIDES / 2 / 3 / High |
+
+**Sleep / wake (spec HW-14, D62) is verified on hardware.**
+
 ## v0.5.0: sleep / wake through a resume blob, D62 (simulation, 2026-10-18)
 
 | Test | Result |

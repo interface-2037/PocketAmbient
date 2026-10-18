@@ -1,6 +1,6 @@
 # Sleep mode: research and plan (2026-10-18)
 
-**Status:** plan A is implemented as D62 (v0.5.0); the hardware checks are in `docs/HW_TEST_NEXT.md`.
+**Status:** plan A is implemented as D62 (v0.5.0) and passed on hardware on 2026-10-18 (`docs/TEST_REPORT.md`).
 
 The sleep **timer** is already done (D2: Off / 30 / 60 / 90 min, 30 s fade). This plan covers the
 Pocket's own **sleep / wake** (power button): `core.json` `"sleep_supported"`, today `false`.
