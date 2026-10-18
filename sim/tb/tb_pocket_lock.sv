@@ -12,9 +12,9 @@ module tb_pocket_lock;
     always @(posedge clk) kd <= keys;
     wire [15:0] edges = keys & ~kd;
     wire [15:0] out;
-    wire        locked, blank;
+    wire        locked, hint;
     pocket_lock #(.HOLD(HOLD), .HINT(HINT)) dut (.clk(clk), .rst(rst), .keys(keys), .edges(edges),
-        .menu_lock(menu), .btn_out(out), .locked(locked), .blank(blank));
+        .menu_lock(menu), .btn_out(out), .locked(locked), .hint(hint));
 
     integer errs = 0;
     reg [15:0] seen;                       // OR of every btn_out since the last clear
@@ -45,7 +45,7 @@ module tb_pocket_lock;
         check(n_out == 0, "Start then Select: no play/stop");
         clr; press(SEL); wait_n(3); tap(UP); release_(SEL); wait_n(3);
         check(seen == UP && n_out == 1, "other buttons still act with Select down");
-        check(!locked && !blank, "still unlocked");
+        check(!locked && !hint, "still unlocked");
 
         // ---- a short chord does nothing
         press(SEL | START); wait_n(HOLD - 5); release_(SEL | START); wait_n(3);
@@ -53,28 +53,28 @@ module tb_pocket_lock;
 
         // ---- holding the chord locks once, with the hint first
         clr; press(SEL | START); wait_n(HOLD + 2);
-        check(locked && !blank, "locked after HOLD, hint showing");
+        check(locked && hint, "locked after HOLD, lock screen showing");
         wait_n(3 * HOLD);
         check(locked, "held on: no second toggle");
-        check(blank, "screen black after the hint");
+        check(!hint, "player screen back after the hint");
         release_(SEL | START); wait_n(3);
         check(n_out == 0, "no button reached the composer during the lock chord");
 
         // ---- locked: presses are swallowed and show the hint
         clr; tap(A); tap(B); tap(UP); tap(START);
         check(n_out == 0, "locked: nothing passes");
-        check(!blank, "locked: a press shows the hint");
+        check(hint, "locked: a press shows the lock screen");
         wait_n(HINT + 2);
-        check(blank, "hint times out");
+        check(!hint && locked, "lock screen times out, still locked");
         tap(A);
-        check(!blank, "hint again on the next press");
+        check(hint, "lock screen again on the next press");
         wait_n(HINT + 2);
 
         // ---- unlock: hold the chord again
         clr; press(SEL | START); wait_n(5);
-        check(!blank, "pressing the chord shows the hint");
+        check(hint, "pressing the chord shows the lock screen");
         wait_n(HOLD);
-        check(!locked && !blank, "unlocked after HOLD");
+        check(!locked && !hint, "unlocked after HOLD");
         release_(SEL | START); wait_n(3);
         check(n_out == 0, "unlock: no play/stop on release");
         clr; tap(A);
@@ -84,17 +84,17 @@ module tb_pocket_lock;
         press(START); wait_n(3);
         @(negedge clk) menu = 1; @(negedge clk) menu = 0;
         clr; wait_n(3);
-        check(locked && !blank, "menu lock, hint showing");
+        check(locked && hint, "menu lock, lock screen showing");
         release_(START); wait_n(3);
         check(n_out == 0, "Start pressed before the lock is not sent");
         wait_n(HINT + 2);
-        check(blank, "menu lock: black after the hint");
+        check(locked && !hint, "menu lock: player screen after the hint");
         @(negedge clk) menu = 1; @(negedge clk) menu = 0; wait_n(2);
-        check(locked && blank, "menu action while locked changes nothing");
+        check(locked && !hint, "menu action while locked changes nothing");
 
         // ---- a reset unlocks
         @(negedge clk) rst = 1; wait_n(3); @(negedge clk) rst = 0; wait_n(2);
-        check(!locked && !blank, "reset unlocks");
+        check(!locked && !hint, "reset unlocks");
 
         if (errs == 0) $display("PASS pocket_lock"); else $display("FAIL pocket_lock: %0d", errs);
         $finish;

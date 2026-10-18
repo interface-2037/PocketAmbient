@@ -8,9 +8,9 @@
  *
  * Visuals setting: Full = everything, Minimal = text only, Off = black. Y (overlay) adds an
  * info box: full seed, uptime and the engine diagnostics. Nothing flashes faster than 1 Hz.
- * Pocket lock (D62, CR_LOCK): a dim lock screen replaces the mode's screen. The hardware
- * blacks out the video while locked and shows this screen only for a few seconds after
- * locking and after a button press.
+ * Pocket lock (D62, CR_LOCK): for 3 s after locking and after any button press while locked
+ * (bit 1, timed by the hardware) a dim lock screen replaces the mode's screen; otherwise the
+ * mode's screen shows as usual.
  */
 #include "ui.h"
 #include "fb.h"
@@ -464,7 +464,7 @@ void ui_frame(void)
     started = 1;
     last_frame = c->now;
     int brk = c->mode == MODE_HUSH && live(c) && c->m.h.section == S_BREAK;
-    if (CR(CR_LOCK) & 1u) {
+    if (CR(CR_LOCK) & 2u) {
         lock_screen(c);
         fb_swap();
         return;

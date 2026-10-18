@@ -93,7 +93,7 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 | 15 | TICK_CYCLES | engine → CPU | CPU cycles used by the previous tick (diagnostic) |
 | 16–25 | ST_* | CPU → video/bridge | state, mode, elapsed s, seed, density, brightness, visuals, overlay, reverb, sleep |
 | 26–29 | DIAG_* | engine → CPU | worst CPU cycles per tick, lowest FIFO level, underruns, shortest/longest frame-tick gap (`[31:16]`/`[15:0]`) |
-| 30 | LOCK | `pocket_lock` → CPU | Pocket lock (D62): bit 0 locked (the UI draws the lock screen), bit 1 video blanked by the hardware |
+| 30 | LOCK | `pocket_lock` → CPU | Pocket lock (D62): bit 0 locked, bit 1 show the lock screen (3 s after locking and after each press while locked; the UI draws the player screen otherwise) |
 
 ## Bridge (APF) addresses
 

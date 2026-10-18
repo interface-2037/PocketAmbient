@@ -1,15 +1,15 @@
-// pocket_lock.sv - Pocket lock (D62): ignore the buttons and black out the screen while the
-// music plays on, so the Pocket can go in a pocket. clk_74a.
+// pocket_lock.sv - Pocket lock (D62): ignore the buttons while the music plays on, so the
+// Pocket can go in a pocket. clk_74a.
 //
 // Lock and unlock: hold Select + Start together for HOLD cycles (2 s). The core menu's
 // "Pocket Lock" action (settings_bridge, 0x5000_0024) also locks. A core reset unlocks.
 //
 // While locked:
 //   - no button edge reaches the composer;
-//   - `blank` is high: ap_top sends black video. The openFPGA API has no backlight or panel
-//     power command, so black is as "off" as a core can make the screen;
-//   - for HINT cycles (3 s) after locking and after any button press, `blank` drops so the
-//     firmware's lock screen ("hold Select + Start to unlock") shows.
+//   - for HINT cycles (3 s) after locking and after any button press, `hint` is high and the
+//     firmware shows its lock screen ("hold Select + Start to unlock") instead of the player
+//     screen. The screen is never blacked out: the openFPGA API has no backlight command, so a
+//     black picture would save next to no battery (D62).
 //
 // Start is the play / stop button and also half of the lock chord, so its press is passed on
 // when Start is released, and only if Select was not down at any time while Start was held.
@@ -28,7 +28,7 @@ module pocket_lock #(
     input  wire        menu_lock,              // pulse: the menu's Pocket Lock action
     output reg  [15:0] btn_out = 16'd0,        // edges for the composer
     output reg         locked = 1'b0,
-    output wire        blank
+    output wire        hint
 );
     localparam integer B_SELECT = 14, B_START = 15;
 
@@ -39,7 +39,7 @@ module pocket_lock #(
     reg        start_pend = 1'b0;              // Start is down and still counts as play / stop
     reg        start_d = 1'b0;
 
-    assign blank = locked && hint_n == 28'd0;
+    assign hint = hint_n != 28'd0;              // only ever set while locked; cleared on unlock
 
     always @(posedge clk) begin
         btn_out <= 16'd0;

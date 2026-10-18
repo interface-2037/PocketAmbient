@@ -6,10 +6,10 @@ D62. Not yet built in Quartus or tested on hardware (steps in `HW_TEST_NEXT.md`)
 
 | Test | Result |
 |---|---|
-| `tb_pocket_lock` (new, Icarus, HOLD 100 / HINT 50 cycles): A acts on its press; Start only on release; Select-then-Start and Start-then-Select send no play / stop; other buttons work with Select down; a chord shorter than HOLD does nothing; holding it locks once (no second toggle while held), hint then black; while locked nothing passes and each press re-shows the hint for HINT; holding the chord again unlocks with no play / stop on release; the menu action locks, a Start held across it is not sent; menu action while locked is a no-op; reset unlocks | **PASS**. Mutation check: 9 single-line mutations (lock gate, Start cancel / pending, re-arm, toggle, hint, menu guard) all make it fail |
+| `tb_pocket_lock` (new, Icarus, HOLD 100 / HINT 50 cycles): A acts on its press; Start only on release; Select-then-Start and Start-then-Select send no play / stop; other buttons work with Select down; a chord shorter than HOLD does nothing; holding it locks once (no second toggle while held), lock screen for HINT then the player screen, still locked; while locked nothing passes and each press re-shows the lock screen for HINT; holding the chord again unlocks with no play / stop on release; the menu action locks, a Start held across it is not sent; menu action while locked is a no-op; reset unlocks | **PASS**. Mutation check: 8 single-line mutations (lock gate, Start cancel / pending, Select masking, re-arm, hint on press / on menu lock / cleared on unlock) all make it fail |
 | `tb_settings` (+ boot / cold): new Pocket Lock action at `0x5000_0024` pulses `cmd_lock` once and is not a reseed; all earlier checks unchanged | **PASS** |
 | `tb_ap_top` (Icarus, pin-level SRAM, CPU + new firmware + engine, `pocket_lock` in the path) | **PASS**: 1440 samples bit-exact, menu seed reads 123, CPU max 200,201 cycles/tick, frame gap 1546..1547 |
-| rvsim, DRIFT and HUSH, seed 9, 20 s: `--ui --lock 4` vs no UI | **identical** audio (also equal to host `render`): the lock screen does not touch the composer |
+| rvsim, DRIFT, HUSH and MOTHER, seed 9, 20 s: `--ui --lock 4` vs no UI | **identical** audio (also equal to host `render`): the lock screen does not touch the composer |
 | rvsim `--frames` with `--lock`: lock screen while playing (TIDES) and stopped | `docs/ui/pocket_lock.png` (normal screen, locked while playing, locked while stopped) |
 | Firmware size | 49,166 of 65,536 bytes |
 
