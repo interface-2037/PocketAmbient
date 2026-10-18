@@ -77,10 +77,18 @@ module tb_settings;
         // 3. APF echo: read density (5), buttons change it to 4, APF writes 5 back -> ignored
         br(1, v); st_density = 4; s0 = seq; bw(1, v);
         check(seq == s0 && dens == 5, "echo write ignored");
-        // 4. user picks the old stored value (5) in the menu while live is 4 -> applies
-        br(1, v); bw(1, 5); check(seq == s0 + 1 && dens == 5, "menu change applies");
+        // 4. user picks a new value (3) in the menu while live is 4 -> applies
+        br(1, v); bw(1, 3); check(seq == s0 + 1 && dens == 3, "menu change applies");
+        // 4b. the v0.4.4 hardware bug: mode TIDES with the buttons, then a menu Brightness change;
+        // the APF re-sends its stale mode copy (2) with it -> ignored, brightness applies (D61)
+        st_mode = 1; br(0, v); s0 = seq; bw(0, 2); bw(2, 4);
+        check(mode == 2 && seq == s0 + 1 && bright == 4, "stale menu copy of mode ignored");
+        br(0, v); check(v == 1, "mode read stays live TIDES");
+        // the APF's copy changes only through its own writes: a real menu mode change applies
+        bw(0, 3); check(mode == 3 && seq == s0 + 2, "menu mode change applies"); st_mode = 3;
+        bw(2, 3); st_bright = 3;
         // 5. density clamps
-        br(1, v); st_density = 5; bw(1, 9); check(dens == 5, "clamp high (no change)"); bw(1, 0); check(dens == 1, "clamp low");
+        br(1, v); st_density = 5; bw(1, 9); check(dens == 3, "clamp high (= live 5: no change)"); bw(1, 0); check(dens == 1, "clamp low");
         // 6. lock seed: off, then on while running latches the session seed
         bw(5, 0); check(!lock, "unlock"); br(6, v); check(v == st_seed, "unlocked seed read = live");
         bw(5, 1); check(lock && seed == 32'hCAFE0001, "lock latches the session seed");

@@ -22,7 +22,10 @@
 // echoes the value last read is ignored (otherwise a button press landing between the APF's read
 // and write-back would be undone), and so is one equal to the current value; a real change sets
 // the stored value and increments SETTINGS_SEQ and the composer re-reads CR_MODE..CR_SLEEP at its
-// next tick. Turning Lock seed on while running latches the current session seed, so the piece
+// next tick. For the settings the buttons also change (mode, density, brightness, visuals), a
+// write that repeats the APF's own last write is ignored too: the APF keeps its own menu copy,
+// which button changes never update, and re-sends it when another menu setting changes (D61).
+// Turning Lock seed on while running latches the current session seed, so the piece
 // playing now is the one that comes back after a reload. Persisted values are written by the APF
 // just before Reset Exit, so these registers are not cleared by the core reset (power-up
 // defaults only).
@@ -108,6 +111,15 @@ module settings_bridge (
     integer i;
     initial for (i = 0; i < 8; i = i + 1) last_rd[i] = 32'd0;
     wire        echo = w < 6'd8 && read_once[w[2:0]] && d == last_rd[w[2:0]];
+    // value last written by the APF for each setting: its own menu copy (D61). The APF writes
+    // that copy back for other elements when one menu setting changes, and a button change
+    // (mode, density, brightness, visuals) never updates it, so a write that repeats it is a
+    // stale re-send, not a menu change.
+    reg  [31:0] last_wr [0:7];
+    reg   [7:0] wr_once = 8'd0;
+    initial for (i = 0; i < 8; i = i + 1) last_wr[i] = 32'd0;
+    wire        btn_el = w == 6'd0 || w == 6'd1 || w == 6'd2 || w == 6'd4;
+    wire        stale = btn_el && wr_once[w[2:0]] && d == last_wr[w[2:0]];
 
     function automatic [2:0] clamp15(input [31:0] v);
         clamp15 = (v < 32'd1) ? 3'd1 : (v > 32'd5) ? 3'd5 : v[2:0];
@@ -171,7 +183,11 @@ module settings_bridge (
         if (bridge_rd && sel) bridge_rd_data <= cur;
         if (bridge_rd && sel_sav) bridge_rd_data <= booted ? img[k] : sav_w[k];
         if (bridge_wr && sel_sav) begin sav_w[k] <= d; sav_new <= 1'b1; end
-        if (bridge_wr && sel && !echo) begin
+        if (bridge_wr && sel && w < 6'd8) begin
+            last_wr[w[2:0]] <= d;
+            wr_once[w[2:0]] <= 1'b1;
+        end
+        if (bridge_wr && sel && !echo && !stale) begin
             case (w)
                 6'd0: if ({30'd0, d[1:0]} != cur) begin cfg_mode <= {1'b0, d[1:0]}; live_mode <= {1'b0, d[1:0]}; settings_seq <= settings_seq + 32'd1; end
                 6'd1: if ({29'd0, clamp15(d)} != cur) begin cfg_density <= clamp15(d); live_density <= clamp15(d); settings_seq <= settings_seq + 32'd1; end
