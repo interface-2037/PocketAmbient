@@ -43,6 +43,18 @@
 // Reset Exit: mode, density, brightness, reverb, visuals and sleep go into cfg_* and live_*, so
 // the composer starts with them and the menu reads them back. Once the composer has run, live_*
 // is the truth and the file is never applied over it.
+//
+// Save state (D62, sleep / wake and Memories; handshake in sleep_state.sv):
+//   0x7000_0000, 8 words: 0 magic "AMSS"   1 {format 1, 21'd0, lock, state[1:0]}   2 the menu seed
+//   3 the session seed (the piece playing)   4 settings (img3 layout)   5 elapsed play time, s
+//   6 0   7 check word (sav_check)
+// On `snap` the image of the live state is latched, so the APF reads a consistent blob while
+// the composer runs on. On `restore` the words the APF wrote are checked like the save file
+// (magic, format, check word, every field in range); a valid blob sets the settings, Lock seed and
+// the seed in cfg_* and live_* (as at a D59 cold start, without SETTINGS_SEQ) and hands the
+// session seed, state and elapsed time to the composer with a new resume_info sequence number.
+// A blob that fails the checks changes nothing. Entering reset clears the sequence number, so a
+// core reset never replays an old resume.
 `default_nettype none
 
 module settings_bridge (
@@ -62,6 +74,13 @@ module settings_bridge (
     input  wire  [1:0] st_visuals,
     input  wire  [1:0] st_sleep,
     input  wire [31:0] st_seed,
+    input  wire  [1:0] st_state,
+    input  wire [31:0] st_elapsed,
+    // save state (sleep_state.sv): latch the blob image / apply the written blob
+    input  wire        ss_snap,
+    input  wire        ss_restore,
+    output reg  [31:0] resume_info = 32'd0,     // CR_RESUME: {seq[7:0], state[1:0], elapsed s[21:0]}
+    output reg  [31:0] resume_seed = 32'd0,     // CR_RESUME_SEED: the session seed to resume
     // settings for the composer (CR_MODE..CR_SLEEP, CR_SETTINGS_SEQ, CR_CMD)
     output reg   [2:0] cfg_mode = 3'd0,
     output reg   [2:0] cfg_density = 3'd3,
@@ -76,9 +95,12 @@ module settings_bridge (
 );
     localparam [31:0] SAV_MAGIC = 32'h414D_4253;    // "AMBS"
     localparam  [7:0] SAV_FORMAT = 8'd1;
+    localparam [31:0] SS_MAGIC = 32'h414D_5353;     // "AMSS"
+    localparam  [7:0] SS_FORMAT = 8'd1;
 
     wire       sel = bridge_addr[31:8] == 24'h500000;
     wire       sel_sav = bridge_addr[31:5] == 27'h300_0000;      // 0x6000_0000..0x6000_001F
+    wire       sel_ss = bridge_addr[31:5] == 27'h380_0000;       // 0x7000_0000..0x7000_001F
     wire [5:0] w = bridge_addr[7:2];
     wire [2:0] k = bridge_addr[4:2];
     wire [31:0] d = bridge_wr_data;
@@ -88,6 +110,8 @@ module settings_bridge (
     reg   [1:0] live_reverb = 2'd1, live_visuals = 2'd0, live_sleep = 2'd0;
     reg  [31:0] live_seed = 32'd0;
     reg         booted = 1'b0;                  // the composer has published its status once
+    reg   [1:0] live_state = 2'd0;
+    reg  [31:0] live_elapsed = 32'd0;
 
     // what the menu shows for setting w now
     reg  [31:0] cur;
@@ -140,6 +164,14 @@ module settings_bridge (
         end
     endfunction
 
+    // a settings word (img3 layout) in range: mode 0-3, density / brightness 1-5,
+    // reverb / visuals 0-2, sleep 0-3, other bits 0
+    function automatic set_in_range(input [31:0] s);
+        set_in_range = s[31:22] == 10'd0 && s[19:18] == 2'd0 && s[15:14] == 2'd0 && !s[11] && !s[7] &&
+                       s[3:2] == 2'd0 && s[6:4] >= 3'd1 && s[6:4] <= 3'd5 && s[10:8] >= 3'd1 &&
+                       s[10:8] <= 3'd5 && s[13:12] != 2'd3 && s[17:16] != 2'd3;
+    endfunction
+
     reg  [31:0] sav_w [0:7];                    // words loaded by the APF (power-up 0)
     initial for (i = 0; i < 8; i = i + 1) sav_w[i] = 32'd0;
     reg         sav_new = 1'b0;                 // loaded since the last Reset Exit
@@ -161,10 +193,31 @@ module settings_bridge (
         img[7] <= sav_check({32'd0, 32'd0, 32'd0, img3, img_seed, {SAV_FORMAT, 23'd0, cfg_seed_lock}, SAV_MAGIC});
         sav_ok <= sav_w[0] == SAV_MAGIC && sav_w[1][31:24] == SAV_FORMAT &&
                   sav_w[7] == sav_check({sav_w[6], sav_w[5], sav_w[4], sav_w[3], sav_w[2], sav_w[1], sav_w[0]});
-        // mode 0-3, density / brightness 1-5, reverb / visuals 0-2, sleep 0-3, other bits 0
-        sav_set_ok <= s3[31:22] == 10'd0 && s3[19:18] == 2'd0 && s3[15:14] == 2'd0 && !s3[11] && !s3[7] &&
-                      s3[3:2] == 2'd0 && s3[6:4] >= 3'd1 && s3[6:4] <= 3'd5 && s3[10:8] >= 3'd1 &&
-                      s3[10:8] <= 3'd5 && s3[13:12] != 2'd3 && s3[17:16] != 2'd3;
+        sav_set_ok <= set_in_range(s3);
+    end
+
+    // ------------------------------------------------------------- save state (D62)
+    reg  [31:0] ss_img [0:7];                   // the blob handed out at the last snap
+    reg  [31:0] ss_w [0:7];                     // words written by the APF
+    initial for (i = 0; i < 8; i = i + 1) begin ss_img[i] = 32'd0; ss_w[i] = 32'd0; end
+    wire [31:0] ss1 = {SS_FORMAT, 21'd0, cfg_seed_lock, live_state};
+    wire [31:0] ss3 = booted ? live_seed : cfg_seed;
+    reg         ss_ok = 1'b0;                   // ss_w holds a valid blob
+    wire [31:0] r1 = ss_w[1], r4 = ss_w[4];
+    always @(posedge clk) begin
+        ss_ok <= ss_w[0] == SS_MAGIC && r1[31:24] == SS_FORMAT && r1[23:3] == 21'd0 && r1[1:0] != 2'd3 &&
+                 set_in_range(r4) && ss_w[6] == 32'd0 &&
+                 ss_w[7] == sav_check({ss_w[6], ss_w[5], ss_w[4], ss_w[3], ss_w[2], ss_w[1], ss_w[0]});
+        if (ss_snap) begin
+            ss_img[0] <= SS_MAGIC;
+            ss_img[1] <= ss1;
+            ss_img[2] <= cfg_seed;
+            ss_img[3] <= ss3;
+            ss_img[4] <= img3;
+            ss_img[5] <= live_elapsed;
+            ss_img[6] <= 32'd0;
+            ss_img[7] <= sav_check({32'd0, live_elapsed, img3, ss3, cfg_seed, ss1, SS_MAGIC});
+        end
     end
 
     always @(posedge clk) begin
@@ -173,7 +226,7 @@ module settings_bridge (
         if (st_valid) begin
             live_mode <= st_mode; live_density <= st_density; live_bright <= st_bright;
             live_reverb <= st_reverb; live_visuals <= st_visuals; live_sleep <= st_sleep;
-            live_seed <= st_seed; booted <= 1'b1;
+            live_seed <= st_seed; live_state <= st_state; live_elapsed <= st_elapsed; booted <= 1'b1;
         end
         if (bridge_rd && sel && w < 6'd8) begin
             last_rd[w[2:0]] <= cur;
@@ -183,6 +236,8 @@ module settings_bridge (
         if (bridge_rd && sel) bridge_rd_data <= cur;
         if (bridge_rd && sel_sav) bridge_rd_data <= booted ? img[k] : sav_w[k];
         if (bridge_wr && sel_sav) begin sav_w[k] <= d; sav_new <= 1'b1; end
+        if (bridge_rd && sel_ss) bridge_rd_data <= ss_img[k];
+        if (bridge_wr && sel_ss) ss_w[k] <= d;
         if (bridge_wr && sel && w < 6'd8) begin
             last_wr[w[2:0]] <= d;
             wr_once[w[2:0]] <= 1'b1;
@@ -221,6 +276,19 @@ module settings_bridge (
                     live_reverb <= s3[13:12]; live_visuals <= s3[17:16]; live_sleep <= s3[21:20];
                 end
             end else if (!booted && cfg_seed_lock && cfg_seed == 32'd0) cfg_seed_lock <= 1'b0;
+        end
+        if (rst && !rst_d) resume_info[31:24] <= 8'd0;  // reset entry: no resume to replay
+        // save state written by the APF (wake, Memories load): after the menu writes, so it wins
+        if (ss_restore && ss_ok) begin
+            cfg_mode <= ss_w[4][2:0]; cfg_density <= ss_w[4][6:4]; cfg_bright <= ss_w[4][10:8];
+            cfg_reverb <= ss_w[4][13:12]; cfg_visuals <= ss_w[4][17:16]; cfg_sleep <= ss_w[4][21:20];
+            live_mode <= ss_w[4][2:0]; live_density <= ss_w[4][6:4]; live_bright <= ss_w[4][10:8];
+            live_reverb <= ss_w[4][13:12]; live_visuals <= ss_w[4][17:16]; live_sleep <= ss_w[4][21:20];
+            cfg_seed_lock <= ss_w[1][2];
+            cfg_seed <= ss_w[2];
+            resume_seed <= ss_w[3];
+            resume_info <= {resume_info[31:24] + 8'd1, ss_w[1][1:0],
+                            ss_w[5] > 32'h3F_FFFF ? 22'h3F_FFFF : ss_w[5][21:0]};
         end
     end
 endmodule

@@ -1,5 +1,19 @@
 # Test report
 
+## v0.5.0: sleep / wake through a resume blob, D62 (simulation, 2026-10-18)
+
+| Test | Result |
+|---|---|
+| `tb_sleep` (new, Icarus): `sleep_state.sv` + `settings_bridge.sv`. Query (supported, `0x7000_0000`, `0x20`). Held start request: one ack, ok. Snap while TIDES / 4 / 2 / High / Minimal / 60 min plays (seed `DEADBEEF`, 3725 s), then the state changes during APF-style reads. Wake on fresh registers: the stale menu file in reset, boot, blob written while running, load. Nine rejected blobs (magic, format 2, check word, state 3, reserved bit in word 1, density 0, brightness 6, reverb 3, reserved settings bit). A Memories load while running with elapsed past 22 bits. Reset entry and exit | **PASS**: the blob is `AMSS 01000001 555 DEADBEEF` + settings + 3725 + check word, unchanged by the later state; a second snap takes the new state. After the load, `CR_RESUME` = seq 1 / playing / 3725 s, `CR_RESUME_SEED` = `DEADBEEF`, settings, Lock seed and seed 4242 from the blob, and the menu reads them back. Every rejected blob changes nothing. The second load gives seq 2 / title / elapsed clamped to `3FFFFF`. Reset entry clears the sequence. **Mutations** (each caught): check word ignored (10 FAILs), snap not latched (4), settings range check removed (6), state-3 check removed (3), reset clear removed (3), seed not restored (3) |
+| `test_resume` (new, unit) | **PASS**: a wake into TIDES at tick 50 is bit-exact with pressing A at tick 50 on the same seed (whole-run hash). The elapsed time carries on from 600 s, the fade-in is monotonic, and there is one resume for a held `CR_RESUME`. A 30 min sleep timer resumed at 29:50 fades 10 s later to exact silence. A Memories load while playing crossfades to HUSH / seed 777 with no gain dip; a stopped state loaded while playing fades to silence and the title. With no load the music is unchanged |
+| `tests` (all) | **PASS**: 495,170 checks, 0 failed |
+| `tools/check_fw.sh 30` and `check_fw.sh 40` with `SET=5:RESUME…,20:RESUME…,32:RESUME=0x03000000` (firmware on the RV32 ISS vs the host render, all modes) | **PASS** both. The resume script changes the output (DRIFT → HUSH at 5 s, MOTHER at 20 s, silence after 32 s), so the match is not trivial |
+| `tb_ap_top` `RESUME=1` (new; CPU + firmware + engine + pin-level SRAM): the blob written over the bridge at tick 2 while DRIFT plays, then the load | **PASS**: 1440 samples bit-exact with `render --mode drift --seed 123 --set 0.003:RESUME_SEED=4242,0.003:MODE=hush,0.003:DENSITY=5,0.003:SEED=4242,0.003:RESUME=0x01400258`, which differs from plain DRIFT from sample 642. The menu reads HUSH / 5 / lock / 4242, and a new snap hands out session seed 4242, settings `1352`, elapsed 600. The first run failed because the testbench pulsed the load one clock after the last blob write, before the registered blob check saw it; the APF sends the load as a separate host command much later, so the testbench now waits 4 clocks |
+| `tb_ap_top` default and `RESTORE=1`, `tb_settings` | **PASS**: unchanged (1440 / 480 samples bit-exact, CPU max 227,299 / 227,391 cycles per tick) |
+| Firmware size | 48,874 of 65,536 bytes |
+
+Not run: Quartus build and timing, Verilator `run_sys.sh` (it now passes `RESUME` / `RESUME_SEED` from `--set`), hardware (`HW_TEST_NEXT.md` v0.5.0).
+
 ## v0.4.4 on hardware (2026-10-12)
 
 Build on the PC (Quartus Lite 25.1std). The default fitter seed missed hold by −0.044 ns (fast 1100 mV 0 °C, `ve_interp:u_isawA` c2 → fr, logic unchanged since v0.4.1). A refit with `--seed=3` and no source change met every corner: worst setup +1.723 ns, worst hold +0.111 ns, 12,115 ALMs (66 %), 301 / 308 M10K. Tested as the dev package.

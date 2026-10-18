@@ -178,6 +178,7 @@ struct comp {
     uint8_t  seed_lock;
     uint64_t now, play_start, state_t;
     uint32_t settings_seq;
+    uint8_t  resume_seq;            /* CR_RESUME sequence last handled (D62) */
     prng_t   r_harm, r_rhythm, r_timbre, r_form, r_meta;
     sched_t  sched;
     weather_t wx;

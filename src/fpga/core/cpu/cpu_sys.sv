@@ -37,6 +37,8 @@ module cpu_sys #(
     input  wire  [1:0] cfg_sleep,
     input  wire        cmd_reseed,         // pulse
     input  wire [31:0] settings_seq,
+    input  wire [31:0] resume_info,        // CR_RESUME / CR_RESUME_SEED: save state to resume (D62)
+    input  wire [31:0] resume_seed,
     input  wire [31:0] rtc_epoch,
     input  wire [15:0] btn_edge,           // pressed-edge pulses (debounced), regs.h BTN_* bits
     // firmware load (dev builds: APF data slot over the bridge, D50); used only while the CPU
@@ -205,6 +207,8 @@ module cpu_sys #(
             5'd27: ctrl_rd = {21'd0, fifo_min};
             5'd28: ctrl_rd = {16'd0, underruns};
             5'd29: ctrl_rd = diag_frame;
+            5'd30: ctrl_rd = resume_info;
+            5'd31: ctrl_rd = resume_seed;
             5'd16, 5'd17, 5'd18, 5'd19, 5'd20, 5'd21, 5'd22, 5'd23, 5'd24, 5'd25: ctrl_rd = st_r[r];
             default: ctrl_rd = 32'd0;
         endcase

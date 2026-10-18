@@ -177,6 +177,7 @@ int main(int argc, char **argv)
             d->cfg_mode = ctrl[CR_MODE]; d->cfg_density = ctrl[CR_DENSITY]; d->cfg_bright = ctrl[CR_BRIGHT];
             d->cfg_reverb = ctrl[CR_REVERB]; d->cfg_visuals = ctrl[CR_VISUALS]; d->cfg_seed_lock = ctrl[CR_SEED_LOCK];
             d->cfg_seed = ctrl[CR_SEED]; d->cfg_sleep = ctrl[CR_SLEEP]; d->settings_seq = ctrl[CR_SETTINGS_SEQ];
+            d->resume_info = ctrl[CR_RESUME]; d->resume_seed = ctrl[CR_RESUME_SEED];
         }
         if (fast) d->frame_tick = (cyc & 1u) && d->fifo_level > 16;
         else { frame_acc += 1.0; d->frame_tick = 0; if (frame_acc >= 1546.875) { frame_acc -= 1546.875; d->frame_tick = 1; } }
