@@ -251,7 +251,7 @@ Build v0.2.3 (`engine_test.sv`): SRAM BIST, then recorded composer excerpts (see
 
 ## Phase 1: host model + composer (2026-10-10)
 
-Build: WinLibs GCC 16.2, `-O2`. Raw results: `reports/2026-10-09-full/` (JSON, plots, traces).
+Build: WinLibs GCC 16.2, `-O2`. Raw results (JSON, plots, traces) were kept locally in `reports/`, which is not part of the repository.
 
 ### Unit / system tests (`make test`)
 
@@ -281,7 +281,7 @@ Round 1 (2026-10-10): DRIFT and TIDES good. HUSH (nature textures) rejected as "
 Round 2 (2026-10-10): TIDES perfect. DRIFT had a "harsh noisy constant background" and HUSH "static" in the crackle → removed DRIFT's room-air bed and HUSH's rain bed, and thinned the crackle (D34). A 4th mode, **MOTHER** (Nostromo computer room, no music), was added (D35, D36).
 
 **Round 3 (2026-10-10): signed off as "good enough" by the user for all four modes.** Further musical tuning is deferred to after the hardware build (DECISIONS D39). Validation for this round:
-- `reports/2026-10-10-full/`: DRIFT, TIDES and HUSH all pass, with defaults at -19.5 / -20.7 / -19.9 LUFS.
+- (local raw results, not in the repository) `reports/2026-10-10-full/`: DRIFT, TIDES and HUSH all pass, with defaults at -19.5 / -20.7 / -19.9 LUFS.
 - `reports/2026-10-10-full-mother/`: **13 / 13**, default -21.5 LUFS. This is MOTHER retuned to the reference clip (D38): within ±3.7 dB of `reference/MOTHER.wav` from 0 Hz to 10 kHz.
 
 Unit tests: 494,960 checks, 0 failed.

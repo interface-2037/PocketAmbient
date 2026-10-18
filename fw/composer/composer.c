@@ -264,23 +264,29 @@ static void handle_buttons(comp_t *c, uint32_t b)
     /* BTN_SELECT: speaker EQ, reserved for v2 */
 }
 
+/* The buttons also change mode, density, brightness and visuals, and that never updates their
+ * menu registers. So these four are applied only when their register changed since the last
+ * read: a menu change of another setting must not restore their stale menu values (D62). */
 static void read_menu(comp_t *c, int first)
 {
-    uint32_t m = hal_ctrl_read(CR_MODE);
-    c->density = clamp15((int)hal_ctrl_read(CR_DENSITY));
-    c->bright = clamp15((int)hal_ctrl_read(CR_BRIGHT));
+    uint32_t m = hal_ctrl_read(CR_MODE), dn = hal_ctrl_read(CR_DENSITY);
+    uint32_t br = hal_ctrl_read(CR_BRIGHT), vi = hal_ctrl_read(CR_VISUALS);
     uint8_t rv = (uint8_t)(hal_ctrl_read(CR_REVERB) % 3);
-    c->visuals = (uint8_t)(hal_ctrl_read(CR_VISUALS) % 3);
     c->seed_lock = (uint8_t)(hal_ctrl_read(CR_SEED_LOCK) & 1);
     c->user_seed = hal_ctrl_read(CR_SEED);
     c->sleep_sel = (uint8_t)(hal_ctrl_read(CR_SLEEP) & 3);
+    if (first || dn != c->menu_seen[1]) c->density = clamp15((int)dn);
+    if (first || br != c->menu_seen[2]) c->bright = clamp15((int)br);
+    if (first || vi != c->menu_seen[3]) c->visuals = (uint8_t)(vi % 3);
+    uint32_t m_prev = c->menu_seen[0];
+    c->menu_seen[0] = m; c->menu_seen[1] = dn; c->menu_seen[2] = br; c->menu_seen[3] = vi;
     if (first) {
         c->mode = (uint8_t)(m % MODE_COUNT);
         c->reverb = rv;
         return;
     }
     if (rv != c->reverb) { c->reverb = rv; fx_retarget(c, 2000); }
-    if (m % MODE_COUNT != c->mode) do_switch(c, (uint8_t)(m % MODE_COUNT));
+    if (m != m_prev && m % MODE_COUNT != c->mode) do_switch(c, (uint8_t)(m % MODE_COUNT));
 }
 
 static void write_status(comp_t *c)

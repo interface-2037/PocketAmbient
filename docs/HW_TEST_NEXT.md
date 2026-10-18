@@ -1,21 +1,23 @@
-# Hardware test: v0.4.4
+# Hardware test: v0.4.5
 
-Dev package (`AmbientPocket-0.4.4-dev.zip`). Copy it to the SD card as usual, including
-`Assets/ambient/common/composer.bin`. The fix in this build: settings changed with the **buttons**
-now survive a power cycle. At power-on the core takes its settings from `ambient.sav`, which is
-saved from the live settings at every power-off (D59). No change to the music.
+Needs a Quartus build (D61 changes `settings_bridge.sv`), then the dev package
+(`AmbientPocket-0.4.5-dev.zip`). Copy it to the SD card as usual, including
+`Assets/ambient/common/composer.bin`. The fixes in this build: a menu change no longer undoes
+settings changed with the buttons (D61, D62), and the MOTHER rework (D60).
 Note the step number of anything that fails.
 
 1. **Power-cycle first.** Turn the Pocket fully off and on again, then check that the core info
-   shows version **0.4.4**.
-2. **Button changes persist (the v0.4.3 step-3 retest).** In the core menu set Density **5**.
-   Close the menu and press **Down** once: the screen shows Density **4**. Also press **L** or
-   **R** to change Brightness, and **Left** or **Right** to change Mode. Write down Mode, Density
-   and Brightness as the screen shows them. Do **not** open the menu again. Power off, power on,
-   start the core. Density comes back as **4**, and Mode and Brightness come back as you wrote
-   them down. Open the menu: it shows the **same values** as the screen.
-3. **A menu change still persists.** In the core menu set Reverb **High**. Power-cycle and start
-   the core. The menu shows Reverb High.
-4. **Lock Seed recheck.** Turn Lock Seed **on** in the menu and note the SEED in the Y overlay.
-   Power-cycle and start the core. The overlay shows the **same seed**.
-5. **Put the SD card back in the PC**, so `ambient.sav` and `interact_persist.json` can be checked.
+   shows version **0.4.5**.
+2. **The reported bug.** Start the core in DRIFT. Press **Right** once (TIDES). In the core menu
+   change **Brightness**. Close the menu: the mode is still **TIDES**.
+3. **Other settings too.** Press **Up** (Density +1), **R** (Brightness +1) and **X** (Visuals).
+   Write down what the screen shows. In the core menu change **Reverb** only. Close the menu:
+   Mode, Density, Brightness and Visuals are unchanged.
+4. **A menu change still applies.** In the core menu pick a **Mode** different from both the
+   current one and the one you started in: the mode changes (6 s crossfade). Pick a different
+   **Density**: it changes, and Brightness stays.
+5. **Persistence still works (the v0.4.4 checks).** Change Density with the buttons, power off
+   and on, start the core: the button value comes back, and the menu shows the same values as
+   the screen. Lock Seed on, power-cycle: the Y overlay shows the same seed.
+6. **MOTHER.** Listen for a few minutes: sine chirps at 1.5–2.2 kHz, a low rumbling hum, vent
+   hiss and clunks, nothing harsh, about as loud as the other modes.

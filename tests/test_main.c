@@ -731,6 +731,55 @@ TEST(test_sleep_timer)
           (unsigned long long)o.nonzero_after);
 }
 
+/* D62: settings changed with the buttons survive a menu change of another setting (the menu
+ * registers of mode, density, brightness and visuals still hold their old values), and a real
+ * menu change of those settings still applies */
+static void menu_set(unsigned reg, uint32_t val)
+{
+    halm_ctrl_set(reg, val);
+    halm_ctrl_set(CR_SETTINGS_SEQ, halm_ctrl_get(CR_SETTINGS_SEQ) + 1u);
+}
+
+static void run_ticks(uint64_t *t, uint64_t end)
+{
+    for (; *t < end; (*t)++) { halm_set_tick(*t); composer_tick(); }
+}
+
+TEST(test_menu_after_buttons)
+{
+    uint64_t t = 0;
+    sm_init(&S);
+    halm_bind(&S);
+    halm_set_tick(0);
+    halm_ctrl_set(CR_MODE, MODE_DRIFT);
+    halm_ctrl_set(CR_DENSITY, 3);
+    halm_ctrl_set(CR_BRIGHT, 3);
+    halm_ctrl_set(CR_REVERB, 1);
+    halm_ctrl_set(CR_VISUALS, 0);
+    halm_ctrl_set(CR_SLEEP, 0);
+    halm_ctrl_set(CR_SEED_LOCK, 1);
+    halm_ctrl_set(CR_SEED, 1);
+    halm_ctrl_set(CR_SETTINGS_SEQ, 0);
+    composer_init();
+    const comp_t *cs = composer_state();
+    halm_press(BTN_A);     run_ticks(&t, 500);
+    halm_press(BTN_RIGHT); run_ticks(&t, 1000);
+    halm_press(BTN_UP);    run_ticks(&t, 1500);
+    halm_press(BTN_R);     run_ticks(&t, 2000);
+    halm_press(BTN_X);     run_ticks(&t, 2500);
+    CHECK(cs->mode == MODE_TIDES && cs->density == 4 && cs->bright == 4 && cs->visuals == 1,
+          "buttons: mode %u density %u bright %u visuals %u", cs->mode, cs->density, cs->bright, cs->visuals);
+    menu_set(CR_REVERB, 2); run_ticks(&t, 3000);
+    CHECK(cs->reverb == 2, "menu reverb change applies");
+    CHECK(cs->mode == MODE_TIDES && cs->density == 4 && cs->bright == 4 && cs->visuals == 1,
+          "a menu reverb change restored stale settings: mode %u density %u bright %u visuals %u",
+          cs->mode, cs->density, cs->bright, cs->visuals);
+    menu_set(CR_MODE, MODE_HUSH); run_ticks(&t, 3500);
+    CHECK(cs->mode == MODE_HUSH, "menu mode change applies (mode %u)", cs->mode);
+    menu_set(CR_DENSITY, 2); run_ticks(&t, 4000);
+    CHECK(cs->density == 2 && cs->bright == 4, "menu density change applies, brightness kept");
+}
+
 int main(int argc, char **argv)
 {
     int longrun = argc > 1 && !strcmp(argv[1], "--long");
@@ -750,6 +799,7 @@ int main(int argc, char **argv)
     RUN(test_tides_system);
     RUN(test_drift_system);
     RUN(test_tick_overflow);
+    RUN(test_menu_after_buttons);
     if (longrun) RUN(test_sleep_timer);
     printf("\n%d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
