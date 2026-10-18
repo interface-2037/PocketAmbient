@@ -119,6 +119,15 @@
                 "writeonly": true,
                 "address": "0x50000020",
                 "value": 1
+            },
+            {
+                "name": "Pocket Lock",
+                "id": 10,
+                "type": "action",
+                "enabled": true,
+                "writeonly": true,
+                "address": "0x50000024",
+                "value": 1
             }
         ],
         "messages": []

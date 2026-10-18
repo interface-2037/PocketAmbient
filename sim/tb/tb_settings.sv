@@ -20,10 +20,12 @@ module tb_settings;
         .st_bright(st_bright), .st_reverb(st_reverb), .st_visuals(st_visuals), .st_sleep(st_sleep),
         .st_seed(st_seed), .cfg_mode(mode), .cfg_density(dens), .cfg_bright(bright), .cfg_reverb(rev),
         .cfg_visuals(vis), .cfg_seed_lock(lock), .cfg_seed(seed), .cfg_sleep(sleep), .settings_seq(seq),
-        .cmd_reseed(reseed));
+        .cmd_reseed(reseed), .cmd_lock(lockcmd));
 
-    integer errs = 0, pulses = 0;
+    integer errs = 0, pulses = 0, lock_pulses = 0;
+    wire        lockcmd;
     always @(posedge clk) if (reseed) pulses = pulses + 1;
+    always @(posedge clk) if (lockcmd) lock_pulses = lock_pulses + 1;
     task bw(input [5:0] k, input [31:0] v);
         begin @(negedge clk); addr = 32'h5000_0000 + 4 * k; wd = v; wr = 1; @(negedge clk) wr = 0; end
     endtask
@@ -94,6 +96,9 @@ module tb_settings;
         bw(5, 1); check(lock && seed == 32'hCAFE0001, "lock latches the session seed");
         // 7. reseed action pulses once per write, echo or not
         bw(8, 1); bw(8, 1); repeat (2) @(negedge clk); check(pulses == 2, "reseed pulses");
+        // 7b. Pocket Lock action (D62): one pulse per write, and it is not a reseed
+        bw(9, 1); repeat (2) @(negedge clk);
+        check(lock_pulses == 1 && pulses == 2, "pocket lock pulse");
         // 8. invalid reverb value ignored
         s0 = seq; bw(3, 3); check(rev == 1 && seq == s0, "reverb 3 ignored"); bw(3, 2); check(rev == 2, "reverb 2"); st_reverb = 2;
 

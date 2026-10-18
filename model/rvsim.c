@@ -12,6 +12,7 @@
  *   --profile N (PC histogram of tick N on stderr)   --eng-cycles N (FIFO estimate, default 700)
  *   --ui (run the screen code with a real-time model)   --frames SEC[,SEC...] (implies --ui: dump
  *   the frame on screen at those times to <prefix>_<ms>.ppm)   --frame-prefix PATH
+ *   --lock SEC (Pocket lock from that time on, D62: CR_LOCK = 1, lock screen showing)
  * Prints instructions per tick (max / mean), an estimate of PicoRV32 cycles and the
  * deepest stack use.
  *
@@ -96,6 +97,7 @@ static double   max_lag;
 typedef struct { uint64_t tick; uint32_t mask; } press_t;
 static press_t presses[4096];
 static int npress, pi_next;
+static uint64_t lock_ms;                      /* --lock: CR_LOCK set from this tick (0 = never) */
 static setscript_t sets[4096];
 static int nset, si_next;
 
@@ -130,6 +132,7 @@ static void deliver_presses(void)
 {
     while (pi_next < npress && presses[pi_next].tick <= tick) ctrl[CR_BTN_EVENTS] |= presses[pi_next++].mask;
     setscript_apply(sets, nset, &si_next, tick, ctrl);
+    if (lock_ms && tick >= lock_ms) ctrl[CR_LOCK] = 1u;
 }
 
 static void fail(const char *what, uint32_t a)
@@ -498,6 +501,7 @@ int main(int argc, char **argv)
             ui_mode = 1;
         }
         else if (ARG("--frame-prefix")) frame_prefix = v;
+        else if (ARG("--lock")) lock_ms = (uint64_t)(atof(v) * 1000.0 + 0.5);
         else if (!strcmp(o, "--ui")) ui_mode = 1;
         else if (ARG("--eng-cycles")) eng_cycles = strtoull(v, NULL, 0);
         else if (!strcmp(o, "--no-autostart")) autostart = 0;

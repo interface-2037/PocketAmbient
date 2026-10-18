@@ -148,6 +148,7 @@ static const unsigned AP_AP_LEN[4] = { 142, 107, 379, 277 };
 #define CR_DIAG_FIFO     27  /* [15:0] lowest audio-FIFO level since it primed */
 #define CR_DIAG_UNDERRUN 28  /* audio-FIFO underruns */
 #define CR_DIAG_FRAME    29  /* [31:16] shortest, [15:0] longest frame-tick gap (clk_74a cycles) */
+#define CR_LOCK          30  /* RO: Pocket lock (D62): bit0 locked, bit1 screen blanked (0 on the host) */
 #define CR_NUM_REGS      32
 
 /* ---- Video control (AP_MMIO_VIDEO, word index) ---- */

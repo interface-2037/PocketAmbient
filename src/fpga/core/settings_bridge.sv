@@ -4,7 +4,7 @@
 //   0x5000_0000, one 32-bit word per setting:
 //   0x00 Mode 0-3        0x04 Density 1-5     0x08 Brightness 1-5    0x0C Reverb 0-2
 //   0x10 Visuals 0-2     0x14 Lock seed 0/1   0x18 Seed (u32)        0x1C Sleep 0-3
-//   0x20 Reseed (action, write-only)
+//   0x20 Reseed (action, write-only)   0x24 Pocket Lock (action, write-only, D62)
 //
 //   0x6000_0000, the save slot (8 words = the 32-byte file, word 0 = file bytes 0..3, MSB first):
 //   0 magic "AMBS"   1 {format 1, 23'd0, lock}   2 seed   3 settings (see img3)   4-6 0
@@ -72,7 +72,8 @@ module settings_bridge (
     output reg  [31:0] cfg_seed = 32'd0,
     output reg   [1:0] cfg_sleep = 2'd0,
     output reg  [31:0] settings_seq = 32'd0,
-    output reg         cmd_reseed = 1'b0
+    output reg         cmd_reseed = 1'b0,
+    output reg         cmd_lock = 1'b0
 );
     localparam [31:0] SAV_MAGIC = 32'h414D_4253;    // "AMBS"
     localparam  [7:0] SAV_FORMAT = 8'd1;
@@ -169,6 +170,7 @@ module settings_bridge (
 
     always @(posedge clk) begin
         cmd_reseed <= 1'b0;
+        cmd_lock <= 1'b0;
         rst_d <= rst;
         if (st_valid) begin
             live_mode <= st_mode; live_density <= st_density; live_bright <= st_bright;
@@ -202,6 +204,7 @@ module settings_bridge (
                 6'd6: if (d != cur) begin cfg_seed <= d; settings_seq <= settings_seq + 32'd1; end
                 6'd7: if ({30'd0, d[1:0]} != cur) begin cfg_sleep <= d[1:0]; live_sleep <= d[1:0]; settings_seq <= settings_seq + 32'd1; end
                 6'd8: cmd_reseed <= 1'b1;
+                6'd9: cmd_lock <= 1'b1;
                 default: ;
             endcase
         end

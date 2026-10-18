@@ -2,7 +2,8 @@
 // the composer firmware on the PicoRV32 drives the audio engine (cpu_sys) and draws the
 // screens into fb_video; the Pocket's buttons go to the composer, the core menu to
 // settings_bridge (pkg/interact.json, and the save slot ambient.sav), and dev builds load the
-// firmware from the SD card.
+// firmware from the SD card. pocket_lock sits between the buttons and the composer and can
+// black out the screen (D62).
 // Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
 // `fault` (CPU trap or bus error) makes core_top show a red screen.
 `default_nettype none
@@ -46,7 +47,19 @@ module ap_top #(
     // ------------------------------------------------------------- buttons: pressed edges
     reg [15:0] k0, k1, k2;
     always @(posedge clk) begin k0 <= cont1_key[15:0]; k1 <= k0; k2 <= k1; end
-    wire [15:0] btn_edge = rst ? 16'd0 : (k1 & ~k2);
+    wire [15:0] key_edge = rst ? 16'd0 : (k1 & ~k2);
+
+    // ------------------------------------------------------------- Pocket lock (D62)
+    wire [15:0] btn_edge;
+    wire        locked, lock_blank, cmd_lock;
+    pocket_lock u_lock (.clk(clk), .rst(rst), .keys(k1), .edges(key_edge), .menu_lock(cmd_lock),
+        .btn_out(btn_edge), .locked(locked), .blank(lock_blank));
+    // black video while locked, outside the hint (2-flop synchroniser into the pixel clock;
+    // a frame of mixed value at the change is harmless)
+    reg         blank_v1, blank_v2;
+    wire [23:0] fb_rgb;
+    always @(posedge vclk) begin blank_v1 <= lock_blank; blank_v2 <= blank_v1; end
+    assign rgb = blank_v2 ? 24'd0 : fb_rgb;
 
     // ------------------------------------------------------------- firmware from the SD card
     // The APF loads data slots while the core is held in reset (before Reset Exit). Bridge words
@@ -83,7 +96,7 @@ module ap_top #(
         .st_reverb(st_reverb[1:0]), .st_visuals(st_visuals[1:0]), .st_sleep(st_sleep[1:0]), .st_seed(st_seed),
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
-        .settings_seq(settings_seq), .cmd_reseed(cmd_reseed));
+        .settings_seq(settings_seq), .cmd_reseed(cmd_reseed), .cmd_lock(cmd_lock));
     reg  [15:0] gap, gap_min, gap_max;
     wire [63:0] tick_n;
     wire [15:0] underruns;
@@ -93,8 +106,9 @@ module ap_top #(
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
         .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .rtc_epoch(rtc_epoch), .btn_edge(btn_edge),
+        .lock_state({lock_blank, locked}),
         .fw_we(fw_we), .fw_addr(fw_addr), .fw_data(fw_data),
-        .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(rgb), .diag_frame({gap_min, gap_max}),
+        .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(fb_rgb), .diag_frame({gap_min, gap_max}),
         .frame_tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
         .mem_req(m_req), .mem_we(m_we), .mem_addr(m_addr), .mem_wd(m_wd), .mem_ack(m_ack), .mem_rd(m_rd),
         .st_state(st_state), .st_mode(st_mode), .st_elapsed(), .st_seed(st_seed), .st_density(st_density),

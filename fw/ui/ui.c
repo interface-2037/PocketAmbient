@@ -8,6 +8,9 @@
  *
  * Visuals setting: Full = everything, Minimal = text only, Off = black. Y (overlay) adds an
  * info box: full seed, uptime and the engine diagnostics. Nothing flashes faster than 1 Hz.
+ * Pocket lock (D62, CR_LOCK): a dim lock screen replaces the mode's screen. The hardware
+ * blacks out the video while locked and shows this screen only for a few seconds after
+ * locking and after a button press.
  */
 #include "ui.h"
 #include "fb.h"
@@ -24,6 +27,7 @@ static const uint32_t PAL_HUSH[4]   = {0x2848A0, 0x78C8D2, 0x96F0DC, 0xC8FFF0};
 static const uint32_t PAL_BREAK[4]  = {0xB23418, 0xF0C8B4, 0xFAF0E6, 0xFFAA78};
 static const uint32_t PAL_MOTHER[4] = {0x000602, 0x1E8C46, 0x46FF82, 0xC8FFD2};
 static const uint32_t PAL_OFF[4]    = {0, 0, 0, 0};
+static const uint32_t PAL_LOCK[4]   = {0x000000, 0x3A4458, 0x6A7480, 0xB4BCC8};
 
 /* ------------------------------------------------------------------ visual events */
 #define EVQ 16
@@ -413,6 +417,29 @@ static void overlay(const comp_t *c)
     fb_text(x, y, b, HI, 1, 1);
 }
 
+/* ------------------------------------------------------------------ Pocket lock (D62) */
+static void centre(int y, const char *s, unsigned col, int scale, int spacing)
+{
+    fb_text(160 - fb_text_w(s, scale, spacing) / 2, y, s, col, scale, spacing);
+}
+
+static void lock_screen(const comp_t *c)
+{
+    static const char *NAME[4] = {"DRIFT", "TIDES", "HUSH", "MOTHER"};
+    char b[24];
+    fb_palette(PAL_LOCK);
+    fb_clear(BG);
+    fb_rect(138, 84, 181, 120, LINE);                              /* padlock */
+    fb_fill(150, 96, 169, 108, LINE);
+    fb_arc(159, 84, 14, 18, 0, 128, 8, LINE);
+    fb_arc(159, 84, 11, 15, 0, 128, 8, LINE);
+    centre(140, "LOCKED", HI, 3, 1);
+    centre(186, "HOLD SELECT + START", TXT, 1, 1);
+    centre(200, "FOR 2 SECONDS TO UNLOCK", TXT, 1, 1);
+    put_hms(put_s(put_s(b, NAME[c->mode & 3u]), "  "), elapsed_s(c));
+    centre(256, c->state == CS_TITLE ? "STOPPED" : b, LINE, 1, 1);
+}
+
 /* ------------------------------------------------------------------ frame scheduling */
 static uint64_t last_frame;
 static int      started;
@@ -437,6 +464,11 @@ void ui_frame(void)
     started = 1;
     last_frame = c->now;
     int brk = c->mode == MODE_HUSH && live(c) && c->m.h.section == S_BREAK;
+    if (CR(CR_LOCK) & 1u) {
+        lock_screen(c);
+        fb_swap();
+        return;
+    }
     if (c->visuals == 2) {
         fb_palette(PAL_OFF);
         fb_clear(BG);

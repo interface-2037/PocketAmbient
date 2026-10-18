@@ -86,13 +86,14 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 | 7 | SLEEP | bridge → CPU | 0 Off, 1 30 min, 2 60 min, 3 90 min |
 | 8 | CMD | bridge → CPU | bit0 reseed; clear-on-read |
 | 9 | SETTINGS_SEQ | bridge → CPU | increments on every menu write; the composer re-reads 0–7 when it changes |
-| 10 | BTN_EVENTS | input → CPU | pressed-edge bitmap (debounced), clear-on-read |
+| 10 | BTN_EVENTS | input → CPU | pressed-edge bitmap (debounced), clear-on-read. Passes through `pocket_lock` (D62): nothing while locked, Start on its release, Select never |
 | 11 | RTC_EPOCH | APF → CPU | |
 | 12, 13 | TICK_LO / HI | engine → CPU | 64-bit tick counter |
 | 14 | TICK_DONE | CPU → engine | write: this tick's composer work is done; the engine renders the tick's 48 samples, then increments TICK |
 | 15 | TICK_CYCLES | engine → CPU | CPU cycles used by the previous tick (diagnostic) |
 | 16–25 | ST_* | CPU → video/bridge | state, mode, elapsed s, seed, density, brightness, visuals, overlay, reverb, sleep |
 | 26–29 | DIAG_* | engine → CPU | worst CPU cycles per tick, lowest FIFO level, underruns, shortest/longest frame-tick gap (`[31:16]`/`[15:0]`) |
+| 30 | LOCK | `pocket_lock` → CPU | Pocket lock (D62): bit 0 locked (the UI draws the lock screen), bit 1 video blanked by the hardware |
 
 ## Bridge (APF) addresses
 
@@ -101,6 +102,6 @@ Every read word is captured on the `bridge_rd` strobe and held; `core_top` selec
 | Address | Use |
 |---|---|
 | `0x2000_0000`–`0x2000_FFFF` | Composer firmware data slot (dev builds, D50): writes CPU RAM while the core is in reset; words byte-swapped from the bridge's big-endian order |
-| `0x5000_0000` + 4·k | Core menu (D51, `pkg/interact.json`): k = 0 Mode, 1 Density, 2 Brightness, 3 Reverb, 4 Visuals, 5 Lock seed, 6 Seed, 7 Sleep, 8 Reseed (action). Reads return the composer's last live value, also in reset (D57). |
+| `0x5000_0000` + 4·k | Core menu (D51, `pkg/interact.json`): k = 0 Mode, 1 Density, 2 Brightness, 3 Reverb, 4 Visuals, 5 Lock seed, 6 Seed, 7 Sleep, 8 Reseed (action), 9 Pocket Lock (action, D62). Reads return the composer's last live value, also in reset (D57). |
 | `0x6000_0000`–`0x6000_001F` | Save slot `ambient.sav` (slot id 1, D58): 8 words, magic `AMBS`, lock, seed, settings, check word |
 | `0xF8xx_xxxx` | APF command block (template `core_bridge_cmd.v`) |
