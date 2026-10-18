@@ -12,7 +12,9 @@
 | `tb_ap_top` default and `RESTORE=1`, `tb_settings` | **PASS**: unchanged (1440 / 480 samples bit-exact, CPU max 227,299 / 227,391 cycles per tick) |
 | Firmware size | 48,874 of 65,536 bytes |
 
-Not run: Quartus build and timing, Verilator `run_sys.sh` (it now passes `RESUME` / `RESUME_SEED` from `--set`), hardware (`HW_TEST_NEXT.md` v0.5.0).
+**Quartus Lite 25.1std (2026-10-18):** full compilation successful, 0 errors. 12,342 / 18,480 ALMs (67 %), 301 / 308 M10K (98 %, unchanged), 26 DSP. Timing met at every corner: worst setup +1.475 ns (Slow 1100 mV 0 °C, clk_74a), worst hold +0.056 ns (Fast 1100 mV 0 °C, clk_74a).
+
+Not run: Verilator `run_sys.sh` (it now passes `RESUME` / `RESUME_SEED` from `--set`), hardware (`HW_TEST_NEXT.md` v0.5.0).
 
 ## v0.4.4 on hardware (2026-10-12)
 
