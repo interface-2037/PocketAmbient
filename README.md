@@ -26,7 +26,7 @@ document are facts still to be checked on hardware.
 | 5: controls, menu, video | done; v0.4.0 tested on hardware (2026-10-11); fixes in v0.4.1–v0.4.4 (D53–D59) |
 | 6: timing closure, soak | done; timing margin (D55), 10.2 M-sample voice-engine soak and mutation check (docs/TEST_REPORT.md); v0.4.4 passed on hardware (2026-10-12), settings persist |
 | v0.5.0 | sleep / wake through a resume save state (D63; passed on hardware as a sleep-only build), menu changes no longer undo button changes (D61, D62), MOTHER rework (D60). Combined build: hardware test pending |
-| v0.6.0 | v0.5.0 + Pocket lock (D64: hold Select + Start 2 s; passed on hardware as a lock-only build v0.5.1 / v0.5.2, together with D62). Combined build: hardware test pending |
+| v0.6.0 | v0.5.0 + Pocket lock (D64: hold Select + Start 2 s; passed on hardware as a lock-only build v0.5.1 / v0.5.2, together with D62). Combined build **passed on hardware** (2026-10-18) |
 
 ## Layout
 

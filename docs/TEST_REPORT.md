@@ -1,5 +1,9 @@
 # Test report
 
+## v0.6.0 on hardware (2026-10-18)
+
+Dev package, Quartus seed 2 (timing met). User test of `HW_TEST_NEXT.md` v0.6.0: **all 9 steps pass**: version 0.6.0; Pocket lock with the buttons and from the menu (D64); menu change keeps a button mode change (D62); button settings and Lock Seed persist; MOTHER (D60); sleep / wake on the same seed with the elapsed time carried on (D63); button settings survive sleep and a later menu change; locked, then sleep / wake comes back unlocked; Memories save / load.
+
 ## v0.6.0: lock branch merged with main (2026-10-18)
 
 The Pocket lock branch (v0.5.1 / v0.5.2, results below) merged with `main` (v0.5.0: sleep D63 + menu fix D62). The lock branch's own copy of the menu fix was dropped for main's identical D62. `CR_LOCK` moved from control word 30 to **32** (sleep uses 30 / 31); `cpu_sys` decodes words 32–63 (word 32 = lock, others 0). 
