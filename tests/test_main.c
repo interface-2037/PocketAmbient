@@ -731,6 +731,60 @@ TEST(test_sleep_timer)
           (unsigned long long)o.nonzero_after);
 }
 
+/* D64 (v0.5.1 hardware): a menu change re-reads the menu registers, which button changes never
+ * update. Mode, density and visuals changed with the buttons must survive a later menu change of
+ * another setting; a real menu change of a setting still applies. */
+static void tick_ms(uint64_t *t, uint64_t n)
+{
+    for (uint64_t e = *t + n; *t < e; (*t)++) {
+        halm_set_tick(*t);
+        composer_tick();
+        for (unsigned k = 0; k < AP_TICK_SAMPLES; k++) { int16_t l, r; sm_process(&S, &l, &r); }
+    }
+}
+
+static void menu_set(unsigned reg, uint32_t v)
+{
+    halm_ctrl_set(reg, v);
+    halm_ctrl_set(CR_SETTINGS_SEQ, halm_ctrl_get(CR_SETTINGS_SEQ) + 1);
+}
+
+TEST(test_menu_after_buttons)
+{
+    uint64_t t = 0;
+    sm_init(&S);
+    halm_bind(&S);
+    halm_set_trace(NULL, NULL);
+    halm_set_tick(0);
+    halm_ctrl_set(CR_MODE, MODE_DRIFT);
+    halm_ctrl_set(CR_DENSITY, 3);
+    halm_ctrl_set(CR_BRIGHT, 3);
+    halm_ctrl_set(CR_REVERB, 1);
+    halm_ctrl_set(CR_VISUALS, 0);
+    halm_ctrl_set(CR_SLEEP, 0);
+    halm_ctrl_set(CR_SEED_LOCK, 1);
+    halm_ctrl_set(CR_SEED, 31);
+    halm_ctrl_set(CR_SETTINGS_SEQ, 0);
+    composer_init();
+    const comp_t *c = composer_state();
+    halm_press(BTN_A);                tick_ms(&t, 2000);
+    halm_press(BTN_RIGHT | BTN_UP | BTN_X); tick_ms(&t, 100);
+    CHECK(c->mode == MODE_TIDES && c->density == 4 && c->visuals == 1, "buttons: mode %u density %u visuals %u",
+          c->mode, c->density, c->visuals);
+    menu_set(CR_BRIGHT, 5);           tick_ms(&t, 100);
+    CHECK(c->bright == 5, "menu brightness not applied (%u)", c->bright);
+    CHECK(c->mode == MODE_TIDES, "menu brightness change reverted the mode to %u", c->mode);
+    CHECK(c->density == 4 && c->visuals == 1, "menu brightness change reverted density %u / visuals %u",
+          c->density, c->visuals);
+    halm_press(BTN_L);                tick_ms(&t, 100);
+    menu_set(CR_REVERB, 2);           tick_ms(&t, 100);
+    CHECK(c->bright == 4 && c->reverb == 2, "button brightness %u after a menu reverb change (%u)", c->bright, c->reverb);
+    menu_set(CR_MODE, MODE_MOTHER);   tick_ms(&t, 100);
+    CHECK(c->mode == MODE_MOTHER, "menu mode change not applied (%u)", c->mode);
+    menu_set(CR_DENSITY, 1);          tick_ms(&t, 100);
+    CHECK(c->density == 1 && c->mode == MODE_MOTHER, "menu density %u, mode %u", c->density, c->mode);
+}
+
 int main(int argc, char **argv)
 {
     int longrun = argc > 1 && !strcmp(argv[1], "--long");
@@ -750,6 +804,7 @@ int main(int argc, char **argv)
     RUN(test_tides_system);
     RUN(test_drift_system);
     RUN(test_tick_overflow);
+    RUN(test_menu_after_buttons);
     if (longrun) RUN(test_sleep_timer);
     printf("\n%d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;

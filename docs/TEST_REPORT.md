@@ -1,5 +1,22 @@
 # Test report
 
+## v0.5.1 on hardware (2026-10-18)
+
+Dev package, Quartus seed 2 (timing met). User test of `HW_TEST_NEXT.md` v0.5.1:
+
+| Step | Result |
+|---|---|
+| 1–9. Version 0.5.1; Start on release; lock with Select + Start (lock screen 3 s, then the player screen); locked buttons ignored and re-show the lock screen; unlock; a short chord does nothing; lock from the menu; pocket walk; a power cycle unlocks | **pass** (Pocket lock D63 verified on hardware) |
+| 10. D61 recheck: Right, then a menu Brightness change | **FAIL**: the mode changed too. Root cause and fix: D64 (firmware) |
+
+## D64: menu change no longer undoes button changes (simulation, 2026-10-18)
+
+| Test | Result |
+|---|---|
+| `test_menu_after_buttons` (new, host): Right / Up / X, menu Brightness 5; L, menu Reverb High; menu Mode MOTHER; menu Density 1 | **PASS** (7 checks). Built against the v0.5.1 `composer.c`: **FAIL** 3 checks, mode reverted to DRIFT, density 3 / visuals Full, brightness back to 5: the hardware symptom |
+| RISC-V firmware (rvsim) vs host `render`, DRIFT and HUSH, seed 77, presses 3:RIGHT 4:UP 5:X, menu 7:BRIGHT=5 9:MODE=mother | **bit-exact**. DRIFT: Right → TIDES at 3 s, no switch at the Brightness change, MOTHER at 9 s |
+| Firmware size | 49,310 of 65,536 bytes |
+
 ## v0.5.1: Pocket lock (simulation, 2026-10-18)
 
 D63. Not yet tested on hardware (steps in `HW_TEST_NEXT.md`). Numbered v0.5.1 / D63 because the sleep / wake build on branch `claude/sleep-mode-implementation-b5d45b` is v0.5.0 / D62; this build does not include it.

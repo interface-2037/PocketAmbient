@@ -178,6 +178,7 @@ struct comp {
     uint8_t  seed_lock;
     uint64_t now, play_start, state_t;
     uint32_t settings_seq;
+    uint32_t menu_mode, menu_density, menu_bright, menu_visuals;   /* menu values last read (D64) */
     prng_t   r_harm, r_rhythm, r_timbre, r_form, r_meta;
     sched_t  sched;
     weather_t wx;
