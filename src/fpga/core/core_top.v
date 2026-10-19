@@ -323,8 +323,8 @@ always @(*) begin
         // bridge_rd_data <= example_device_data;
         bridge_rd_data <= 0;
     end
-    8'h50, 8'h60: begin
-        bridge_rd_data <= settings_rd_data;     // core menu and save slot (settings_bridge.sv)
+    8'h50, 8'h60, 8'h70: begin
+        bridge_rd_data <= settings_rd_data;     // core menu, save slot, save state (settings_bridge.sv)
     end
     8'hF8: begin
         bridge_rd_data <= cmd_bridge_rd_data;
@@ -385,6 +385,29 @@ end
     wire            savestate_load_err;
     
     wire            osnotify_inmenu;
+
+// Sleep / wake (core.json "sleep_supported", D63): the save state is a 0x20-byte blob at
+// 0x7000_0000 in settings_bridge.sv; sleep_state.sv answers the APF's handshake.
+    wire            ss_snap, ss_restore;
+sleep_state #(.ADDR(32'h7000_0000), .SIZE(32'h20)) ss (
+    .clk            ( clk_74a ),
+    .supported      ( savestate_supported ),
+    .addr           ( savestate_addr ),
+    .size           ( savestate_size ),
+    .maxloadsize    ( savestate_maxloadsize ),
+    .start          ( savestate_start ),
+    .start_ack      ( savestate_start_ack ),
+    .start_busy     ( savestate_start_busy ),
+    .start_ok       ( savestate_start_ok ),
+    .start_err      ( savestate_start_err ),
+    .load           ( savestate_load ),
+    .load_ack       ( savestate_load_ack ),
+    .load_busy      ( savestate_load_busy ),
+    .load_ok        ( savestate_load_ok ),
+    .load_err       ( savestate_load_err ),
+    .snap           ( ss_snap ),
+    .restore        ( ss_restore )
+);
 
 // bridge target commands
 // synchronous to clk_74a
@@ -667,6 +690,8 @@ ap_top ap (
     .bridge_addr ( bridge_addr ),
     .bridge_wr_data ( bridge_wr_data ),
     .settings_rd_data ( settings_rd_data ),
+    .ss_snap        ( ss_snap ),
+    .ss_restore     ( ss_restore ),
     .rtc_epoch  ( rtc_epoch_seconds ),
     .cont1_key  ( cont1_key ),
     .tick       ( frame_tick ),

@@ -37,9 +37,11 @@ module cpu_sys #(
     input  wire  [1:0] cfg_sleep,
     input  wire        cmd_reseed,         // pulse
     input  wire [31:0] settings_seq,
+    input  wire [31:0] resume_info,        // CR_RESUME / CR_RESUME_SEED: save state to resume (D63)
+    input  wire [31:0] resume_seed,
     input  wire [31:0] rtc_epoch,
     input  wire [15:0] btn_edge,           // pressed-edge pulses (debounced), regs.h BTN_* bits
-    input  wire  [1:0] lock_state,         // Pocket lock (D63): bit0 locked, bit1 lock screen showing
+    input  wire  [1:0] lock_state,         // Pocket lock (D64): bit0 locked, bit1 lock screen showing
     // firmware load (dev builds: APF data slot over the bridge, D50); used only while the CPU
     // is held in reset, otherwise ignored
     input  wire        fw_we,
@@ -206,7 +208,8 @@ module cpu_sys #(
             5'd27: ctrl_rd = {21'd0, fifo_min};
             5'd28: ctrl_rd = {16'd0, underruns};
             5'd29: ctrl_rd = diag_frame;
-            5'd30: ctrl_rd = {30'd0, lock_state};
+            5'd30: ctrl_rd = resume_info;
+            5'd31: ctrl_rd = resume_seed;
             5'd16, 5'd17, 5'd18, 5'd19, 5'd20, 5'd21, 5'd22, 5'd23, 5'd24, 5'd25: ctrl_rd = st_r[r];
             default: ctrl_rd = 32'd0;
         endcase
@@ -262,8 +265,8 @@ module cpu_sys #(
                         end
                         2'd2: begin
                             mem_ready <= 1'b1;
-                            if (mem_addr_c[6:2] >= 5'd16 && mem_addr_c[6:2] <= 5'd25) st_r[mem_addr_c[6:2]] <= mem_wdata;
-                            if (mem_addr_c[6:2] == 5'd14 && q == Q_CPU) begin   // CR_TICK_DONE
+                            if (!mem_addr_c[7] && mem_addr_c[6:2] >= 5'd16 && mem_addr_c[6:2] <= 5'd25) st_r[mem_addr_c[6:2]] <= mem_wdata;
+                            if (!mem_addr_c[7] && mem_addr_c[6:2] == 5'd14 && q == Q_CPU) begin   // CR_TICK_DONE
                                 q <= Q_START; n_left <= 6'd48;
                                 tick_cycles <= cyc;
                                 if (cyc > tick_cycles_max) tick_cycles_max <= cyc;
@@ -286,9 +289,11 @@ module cpu_sys #(
                         end
                         2'd2: begin
                             mem_ready <= 1'b1;
-                            mem_rdata <= ctrl_rd(mem_addr_c[6:2]);
-                            if (mem_addr_c[6:2] == 5'd10) btn_evt <= 16'd0;   // clear-on-read
-                            if (mem_addr_c[6:2] == 5'd8) cmd_evt <= 1'b0;
+                            // words 32-63: word 32 = CR_LOCK (D64), the rest read 0
+                            mem_rdata <= !mem_addr_c[7] ? ctrl_rd(mem_addr_c[6:2]) :
+                                         mem_addr_c[6:2] == 5'd0 ? {30'd0, lock_state} : 32'd0;
+                            if (!mem_addr_c[7] && mem_addr_c[6:2] == 5'd10) btn_evt <= 16'd0;   // clear-on-read
+                            if (!mem_addr_c[7] && mem_addr_c[6:2] == 5'd8) cmd_evt <= 1'b0;
                         end
                         default: begin mem_ready <= 1'b1; mem_rdata <= 32'd0; end
                     endcase

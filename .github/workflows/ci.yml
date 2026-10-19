@@ -2,21 +2,29 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 3 * * *"     # nightly: full 8-hour matrix
+  workflow_dispatch:
+    inputs:
+      long:
+        description: "Also run the long unit tests (sleep timer)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   host:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Python deps
-        run: pip install numpy scipy soundfile pyloudnorm matplotlib
+        run: pip install -r requirements.txt
       - name: Tables are up to date
         run: python tools/gen_tables.py && git diff --exit-code
       - name: Build + unit tests
@@ -28,20 +36,21 @@ jobs:
           make fw PYTHON=python
           tools/check_fw.sh 10 build/fw/composer.bin
           tools/check_fw.sh 10
-      - name: Long unit tests (nightly)
-        if: github.event_name == 'schedule'
+      - name: Long unit tests (on request)
+        if: github.event_name == 'workflow_dispatch' && inputs.long
         run: ./build/tests --long
       - name: Render + analyze (10 min per mode / corner / seed)
-        if: github.event_name != 'schedule'
         run: EXE= tools/run_validation.sh quick 4
-      - name: Full render matrix (nightly)
-        if: github.event_name == 'schedule'
-        run: EXE= tools/run_validation.sh full 4
+      # The full 8-hour matrix (tools/run_validation.sh full) does not fit a hosted runner's
+      # time limit; run it locally.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: reports
-          path: reports/
+          path: |
+            reports/*-quick/
+            !reports/*/work/
+          retention-days: 7
   rtl:
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -61,4 +70,5 @@ jobs:
           grep -q "^PASS" tb_settings.log
       - name: Full system (CPU + firmware + engine) == host render, 2 s per mode, with menu changes
         run: make build/render && SET=0.5:MODE=tides,1:RESEED=1,1.5:DENSITY=5 FAST=1 sim/run_sys.sh 2
-  # Quartus builds need a self-hosted runner (see README).
+  # Quartus builds are not run in CI; build locally (README). Do not attach a self-hosted runner
+  # to this public repository: pull requests from forks would run code on it.

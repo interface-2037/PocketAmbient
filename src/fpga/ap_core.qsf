@@ -756,6 +756,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE core/cpu/cpu_sys.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/settings_bridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/pocket_lock.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/slot_size.sv
+set_global_assignment -name SYSTEMVERILOG_FILE core/sleep_state.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/ui/fb_video.sv
 set_global_assignment -name SYSTEMVERILOG_FILE core/ap_top.sv
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to sram_a[*]

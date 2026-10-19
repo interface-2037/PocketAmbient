@@ -19,3 +19,10 @@ sim/out/
 sim/vectors/
 .claude/
 vendor/core-template/
+
+# listening references and experiments: never published (may contain third-party audio or images)
+reference/
+samples/
+
+# validation output (tools/run_validation.sh); results are summarised in docs/TEST_REPORT.md
+reports/

@@ -6,14 +6,14 @@
             "shortname": "AmbientPocket",
             "description": "Generative ambient music: DRIFT, TIDES, HUSH and MOTHER.",
             "author": "beingFar",
-            "url": "",
-            "version": "0.5.2",
+            "url": "https://github.com/interface-2037/PocketAmbient",
+            "version": "0.6.0",
             "date_release": "2026-10-18"
         },
         "framework": {
             "target_product": "Analogue Pocket",
             "version_required": "1.1",
-            "sleep_supported": false,
+            "sleep_supported": true,
             "dock": {
                 "supported": true,
                 "analog_output": false

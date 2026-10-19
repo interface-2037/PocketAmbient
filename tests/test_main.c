@@ -335,6 +335,9 @@ typedef struct {
     uint64_t tick0, ms;
     struct { uint64_t at; uint32_t btn; } press[16];
     int npress;
+    /* a save-state load (D63) at tick res_at (0 = none): what the hardware sets */
+    uint64_t res_at;
+    uint32_t res_info, res_seed, res_mode, res_density, res_lock, res_user_seed;
 } run_cfg_t;
 
 typedef struct {
@@ -372,6 +375,8 @@ static void run_system(const run_cfg_t *c, run_out_t *o)
     halm_ctrl_set(CR_SEED_LOCK, 1);
     halm_ctrl_set(CR_SEED, c->seed);
     halm_ctrl_set(CR_SETTINGS_SEQ, 0);
+    halm_ctrl_set(CR_RESUME, 0);
+    halm_ctrl_set(CR_RESUME_SEED, 0);
     composer_init();
     uint64_t h = 1469598103934665603ull;
     int32_t prev_gain = 0, prev_tgt = -1;
@@ -384,6 +389,14 @@ static void run_system(const run_cfg_t *c, run_out_t *o)
     double acc = 0;
     for (uint64_t t = 0; t < c->ms; t++) {
         for (int i = 0; i < c->npress; i++) if (c->press[i].at == t) halm_press(c->press[i].btn);
+        if (c->res_at && c->res_at == t) {
+            halm_ctrl_set(CR_MODE, c->res_mode);
+            halm_ctrl_set(CR_DENSITY, c->res_density ? c->res_density : 3);
+            halm_ctrl_set(CR_SEED_LOCK, c->res_lock);
+            halm_ctrl_set(CR_SEED, c->res_user_seed);
+            halm_ctrl_set(CR_RESUME_SEED, c->res_seed);
+            halm_ctrl_set(CR_RESUME, c->res_info);
+        }
         halm_set_tick(c->tick0 + t);
         memcpy(fx0, S.fx, sizeof fx0);
         c0 = *composer_state();
@@ -731,22 +744,18 @@ TEST(test_sleep_timer)
           (unsigned long long)o.nonzero_after);
 }
 
-/* D64 (v0.5.1 hardware): a menu change re-reads the menu registers, which button changes never
- * update. Mode, density and visuals changed with the buttons must survive a later menu change of
- * another setting; a real menu change of a setting still applies. */
-static void tick_ms(uint64_t *t, uint64_t n)
+/* D62: settings changed with the buttons survive a menu change of another setting (the menu
+ * registers of mode, density, brightness and visuals still hold their old values), and a real
+ * menu change of those settings still applies */
+static void menu_set(unsigned reg, uint32_t val)
 {
-    for (uint64_t e = *t + n; *t < e; (*t)++) {
-        halm_set_tick(*t);
-        composer_tick();
-        for (unsigned k = 0; k < AP_TICK_SAMPLES; k++) { int16_t l, r; sm_process(&S, &l, &r); }
-    }
+    halm_ctrl_set(reg, val);
+    halm_ctrl_set(CR_SETTINGS_SEQ, halm_ctrl_get(CR_SETTINGS_SEQ) + 1u);
 }
 
-static void menu_set(unsigned reg, uint32_t v)
+static void run_ticks(uint64_t *t, uint64_t end)
 {
-    halm_ctrl_set(reg, v);
-    halm_ctrl_set(CR_SETTINGS_SEQ, halm_ctrl_get(CR_SETTINGS_SEQ) + 1);
+    for (; *t < end; (*t)++) { halm_set_tick(*t); composer_tick(); }
 }
 
 TEST(test_menu_after_buttons)
@@ -754,7 +763,6 @@ TEST(test_menu_after_buttons)
     uint64_t t = 0;
     sm_init(&S);
     halm_bind(&S);
-    halm_set_trace(NULL, NULL);
     halm_set_tick(0);
     halm_ctrl_set(CR_MODE, MODE_DRIFT);
     halm_ctrl_set(CR_DENSITY, 3);
@@ -763,26 +771,97 @@ TEST(test_menu_after_buttons)
     halm_ctrl_set(CR_VISUALS, 0);
     halm_ctrl_set(CR_SLEEP, 0);
     halm_ctrl_set(CR_SEED_LOCK, 1);
-    halm_ctrl_set(CR_SEED, 31);
+    halm_ctrl_set(CR_SEED, 1);
     halm_ctrl_set(CR_SETTINGS_SEQ, 0);
     composer_init();
-    const comp_t *c = composer_state();
-    halm_press(BTN_A);                tick_ms(&t, 2000);
-    halm_press(BTN_RIGHT | BTN_UP | BTN_X); tick_ms(&t, 100);
-    CHECK(c->mode == MODE_TIDES && c->density == 4 && c->visuals == 1, "buttons: mode %u density %u visuals %u",
-          c->mode, c->density, c->visuals);
-    menu_set(CR_BRIGHT, 5);           tick_ms(&t, 100);
-    CHECK(c->bright == 5, "menu brightness not applied (%u)", c->bright);
-    CHECK(c->mode == MODE_TIDES, "menu brightness change reverted the mode to %u", c->mode);
-    CHECK(c->density == 4 && c->visuals == 1, "menu brightness change reverted density %u / visuals %u",
-          c->density, c->visuals);
-    halm_press(BTN_L);                tick_ms(&t, 100);
-    menu_set(CR_REVERB, 2);           tick_ms(&t, 100);
-    CHECK(c->bright == 4 && c->reverb == 2, "button brightness %u after a menu reverb change (%u)", c->bright, c->reverb);
-    menu_set(CR_MODE, MODE_MOTHER);   tick_ms(&t, 100);
-    CHECK(c->mode == MODE_MOTHER, "menu mode change not applied (%u)", c->mode);
-    menu_set(CR_DENSITY, 1);          tick_ms(&t, 100);
-    CHECK(c->density == 1 && c->mode == MODE_MOTHER, "menu density %u, mode %u", c->density, c->mode);
+    const comp_t *cs = composer_state();
+    halm_press(BTN_A);     run_ticks(&t, 500);
+    halm_press(BTN_RIGHT); run_ticks(&t, 1000);
+    halm_press(BTN_UP);    run_ticks(&t, 1500);
+    halm_press(BTN_R);     run_ticks(&t, 2000);
+    halm_press(BTN_X);     run_ticks(&t, 2500);
+    CHECK(cs->mode == MODE_TIDES && cs->density == 4 && cs->bright == 4 && cs->visuals == 1,
+          "buttons: mode %u density %u bright %u visuals %u", cs->mode, cs->density, cs->bright, cs->visuals);
+    menu_set(CR_REVERB, 2); run_ticks(&t, 3000);
+    CHECK(cs->reverb == 2, "menu reverb change applies");
+    CHECK(cs->mode == MODE_TIDES && cs->density == 4 && cs->bright == 4 && cs->visuals == 1,
+          "a menu reverb change restored stale settings: mode %u density %u bright %u visuals %u",
+          cs->mode, cs->density, cs->bright, cs->visuals);
+    menu_set(CR_MODE, MODE_HUSH); run_ticks(&t, 3500);
+    CHECK(cs->mode == MODE_HUSH, "menu mode change applies (mode %u)", cs->mode);
+    menu_set(CR_DENSITY, 2); run_ticks(&t, 4000);
+    CHECK(cs->density == 2 && cs->bright == 4, "menu density change applies, brightness kept");
+}
+
+/* D63: resuming a save state (sleep / wake, Memories load) */
+#define RES_INFO(seq, st, el_s) (((uint32_t)(seq) << 24) | ((uint32_t)(st) << 22) | (uint32_t)(el_s))
+TEST(test_resume)
+{
+    enum { AT = 50, MS = 20000 };
+    /* 1. wake: the core sits at the title, the blob says TIDES playing for 600 s on seed 4321.
+     * The music must equal pressing A at the same tick with that session seed, fading in from 0. */
+    run_cfg_t r = {0};
+    run_out_t ro = {0}, wo = {0};
+    r.mode = MODE_TIDES; r.seed = 4321; r.ms = MS;
+    r.press[0].at = AT; r.press[0].btn = BTN_A; r.npress = 1;
+    ro.zero_from_ms = 0;
+    run_system(&r, &ro);
+    run_cfg_t w = {0};
+    w.mode = MODE_DRIFT; w.seed = 99; w.density = 5; w.ms = MS;   /* the stale menu file */
+    w.res_at = AT; w.res_info = RES_INFO(1, CS_PLAYING, 600); w.res_seed = 4321;
+    w.res_mode = MODE_TIDES; w.res_density = 3; w.res_lock = 1; w.res_user_seed = 4321;
+    run_system(&w, &wo);
+    const comp_t *cs = composer_state();
+    CHECK(wo.hash == ro.hash, "wake: the resumed piece differs from A with the same seed");
+    CHECK(cs->state == CS_PLAYING && cs->mode == MODE_TIDES && cs->sess_seed == 4321 && cs->density == 3,
+          "wake: state %u mode %u seed %u density %u", cs->state, cs->mode, cs->sess_seed, cs->density);
+    CHECK(halm_ctrl_get(CR_ST_ELAPSED_S) == 600 + (MS - 1 - AT) / 1000,
+          "wake: elapsed %u s, want it to carry on from 600 s", halm_ctrl_get(CR_ST_ELAPSED_S));
+    CHECK(wo.gain_monotonic_violations == 0, "wake: the fade-in is not monotonic");
+    int reseeds = 0;
+    for (size_t i = 0; i < g_ntr; i++) reseeds += g_tr[i].kind == TR_RESEED;
+    CHECK(reseeds == 2, "wake: %d session seeds (init + one resume expected; CR_RESUME is held)", reseeds);
+
+    /* 2. the sleep timer keeps its deadline: 30 min, resumed at 29:50 -> the 30 s fade starts 10 s later */
+    run_cfg_t t = w;
+    run_out_t to = {0};
+    t.sleep = 1; t.ms = AT + 10000 + 30000 + 200;
+    t.res_info = RES_INFO(1, CS_PLAYING, 30 * 60 - 10);
+    to.zero_from_ms = AT + 10000 + 30000 + 60;
+    run_system(&t, &to);
+    CHECK(composer_state()->state == CS_TITLE && to.nonzero_after == 0,
+          "sleep timer after a resume: state %u, %llu samples after the fade", composer_state()->state,
+          (unsigned long long)to.nonzero_after);
+
+    /* 3. a Memories load while playing: a crossfade to the new piece, no gain dip */
+    run_cfg_t m = {0};
+    run_out_t mo = {0};
+    m.mode = MODE_DRIFT; m.seed = 7; m.ms = 16000;
+    m.press[0].at = 1; m.press[0].btn = BTN_A; m.npress = 1;
+    m.res_at = 10000; m.res_info = RES_INFO(5, CS_PLAYING, 42); m.res_seed = 777;
+    m.res_mode = MODE_HUSH; m.res_lock = 0; m.res_user_seed = 3;
+    run_system(&m, &mo);
+    cs = composer_state();
+    CHECK(cs->state == CS_PLAYING && cs->mode == MODE_HUSH && cs->m_mode == MODE_HUSH && cs->sess_seed == 777 &&
+          !cs->seed_lock && cs->user_seed == 3 && S.fx[FX_MASTER_TARGET] == (1u << 23),
+          "Memories load while playing: state %u mode %u seed %u", cs->state, cs->mode, cs->sess_seed);
+    CHECK(mo.gain_monotonic_violations == 0, "Memories load while playing: the gain is not monotonic");
+
+    /* 4. a load of a stopped state while playing: the piece fades out to silence and the title */
+    run_cfg_t s = m;
+    run_out_t so = {0};
+    s.res_info = RES_INFO(6, CS_TITLE, 0); s.ms = 10000 + 3000 + 200;
+    so.zero_from_ms = 10000 + 3000 + 60;
+    run_system(&s, &so);
+    CHECK(composer_state()->state == CS_TITLE && composer_state()->mode == MODE_HUSH && so.nonzero_after == 0,
+          "stopped state while playing: state %u, %llu samples after the fade", composer_state()->state,
+          (unsigned long long)so.nonzero_after);
+
+    /* 5. no load: CR_RESUME 0 changes nothing (every other test relies on it too) */
+    run_cfg_t n = r;
+    run_out_t no = {0};
+    run_system(&n, &no);
+    CHECK(no.hash == ro.hash, "no resume: the music changed");
 }
 
 int main(int argc, char **argv)
@@ -805,6 +884,7 @@ int main(int argc, char **argv)
     RUN(test_drift_system);
     RUN(test_tick_overflow);
     RUN(test_menu_after_buttons);
+    RUN(test_resume);
     if (longrun) RUN(test_sleep_timer);
     printf("\n%d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;

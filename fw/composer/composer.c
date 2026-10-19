@@ -264,32 +264,57 @@ static void handle_buttons(comp_t *c, uint32_t b)
     /* BTN_SELECT: speaker EQ, reserved for v2 */
 }
 
-/* The menu registers change only through the menu; the buttons change the composer's own
- * copy. So after a menu change (SETTINGS_SEQ), mode, density, brightness and visuals are taken
- * only if their register changed since the last read: a register that still holds an older
- * menu value must not undo a button change made since (D64). */
+/* The buttons also change mode, density, brightness and visuals, and that never updates their
+ * menu registers. So these four are applied only when their register changed since the last
+ * read: a menu change of another setting must not restore their stale menu values (D62). */
 static void read_menu(comp_t *c, int first)
 {
-    uint32_t m = hal_ctrl_read(CR_MODE);
-    uint32_t dn = hal_ctrl_read(CR_DENSITY);
-    uint32_t br = hal_ctrl_read(CR_BRIGHT);
-    uint32_t vi = hal_ctrl_read(CR_VISUALS);
+    uint32_t m = hal_ctrl_read(CR_MODE), dn = hal_ctrl_read(CR_DENSITY);
+    uint32_t br = hal_ctrl_read(CR_BRIGHT), vi = hal_ctrl_read(CR_VISUALS);
     uint8_t rv = (uint8_t)(hal_ctrl_read(CR_REVERB) % 3);
     c->seed_lock = (uint8_t)(hal_ctrl_read(CR_SEED_LOCK) & 1);
     c->user_seed = hal_ctrl_read(CR_SEED);
     c->sleep_sel = (uint8_t)(hal_ctrl_read(CR_SLEEP) & 3);
-    if (first || dn != c->menu_density) c->density = clamp15((int)dn);
-    if (first || br != c->menu_bright) c->bright = clamp15((int)br);
-    if (first || vi != c->menu_visuals) c->visuals = (uint8_t)(vi % 3);
-    int new_mode = first || m != c->menu_mode;
-    c->menu_mode = m; c->menu_density = dn; c->menu_bright = br; c->menu_visuals = vi;
+    if (first || dn != c->menu_seen[1]) c->density = clamp15((int)dn);
+    if (first || br != c->menu_seen[2]) c->bright = clamp15((int)br);
+    if (first || vi != c->menu_seen[3]) c->visuals = (uint8_t)(vi % 3);
+    uint32_t m_prev = c->menu_seen[0];
+    c->menu_seen[0] = m; c->menu_seen[1] = dn; c->menu_seen[2] = br; c->menu_seen[3] = vi;
     if (first) {
         c->mode = (uint8_t)(m % MODE_COUNT);
         c->reverb = rv;
         return;
     }
     if (rv != c->reverb) { c->reverb = rv; fx_retarget(c, 2000); }
-    if (new_mode && m % MODE_COUNT != c->mode) do_switch(c, (uint8_t)(m % MODE_COUNT));
+    if (m != m_prev && m % MODE_COUNT != c->mode) do_switch(c, (uint8_t)(m % MODE_COUNT));
+}
+
+/* Resume a save state (D63): after a wake (the core has just booted and sits at the title) or a
+ * Memories load (any state). The settings are already in CR_MODE..CR_SLEEP. The piece that was
+ * playing starts again from its session seed: a fade-in from the title, a crossfade during play.
+ * The elapsed time carries on, so the sleep timer keeps its deadline. A piece that was fading
+ * out is resumed as stopped. */
+static void do_resume(comp_t *c, uint32_t info, uint32_t seed)
+{
+    uint8_t was = c->state, st = (uint8_t)((info >> 22) & 3);
+    if (was != CS_TITLE && c->m_mode != MODE_COUNT) mode_end(c);
+    c->settings_seq = hal_ctrl_read(CR_SETTINGS_SEQ);
+    read_menu(c, 1);
+    new_session_seed(c, seed);
+    if (st == CS_PLAYING) {
+        if (was == CS_PLAYING) {
+            mode_begin(c, XFADE_MS);
+        } else {
+            set_state(c, CS_PLAYING);
+            mode_begin(c, was == CS_STOPPING ? XFADE_MS : 0);
+            master_fade(GAIN_UNITY, FADE_IN_MS);
+        }
+        c->play_start = c->now - (uint64_t)(info & 0x3FFFFFu) * 1000u;
+    } else if (was == CS_PLAYING) {
+        do_stop(c, FADE_OUT_MS);      /* the piece has ended: its tail fades, FX change at 0 */
+    } else if (was == CS_TITLE) {
+        fx_retarget(c, 0);
+    }
 }
 
 static void write_status(comp_t *c)
@@ -335,6 +360,11 @@ void composer_tick(void)
     comp_t *c = &C;
     c->now = hal_ticks();
 
+    uint32_t ri = hal_ctrl_read(CR_RESUME);
+    if ((uint8_t)(ri >> 24) != c->resume_seq) {
+        c->resume_seq = (uint8_t)(ri >> 24);
+        do_resume(c, ri, hal_ctrl_read(CR_RESUME_SEED));
+    }
     uint32_t seq = hal_ctrl_read(CR_SETTINGS_SEQ);
     if (seq != c->settings_seq) { c->settings_seq = seq; read_menu(c, 0); }
     if (hal_ctrl_read(CR_CMD) & 1) do_reseed(c);

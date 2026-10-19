@@ -13,8 +13,14 @@
 // first samples must equal render --mode tides --seed 4242 --density 4 --brightness 2 --reverb 2.
 // Then Down lowers the density to 3 and, after reset entry, APF-style reads (word taken after
 // the address has moved on) of the menu and the save slot must return the current settings.
+// With -P tb_ap_top.RESUME=1 a save state (D63) is loaded while DRIFT plays: at tick 3 the blob
+// (HUSH, density 5, Lock seed on with seed 4242, session seed 4242, playing for 600 s) is written
+// over the bridge and the load is pulsed, as the APF does after a wake or a Memories load. The
+// samples must equal render --mode drift --seed 123 --set 0.003:RESUME_SEED=4242,0.003:MODE=hush,
+// 0.003:DENSITY=5,0.003:SEED=4242,0.003:RESUME=0x01400258 --seconds 0.03 (a crossfade to the resumed piece), the menu must
+// read the blob's settings, and a new snap must hand out the resumed state.
 `timescale 1ns/1ps
-module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "core/cpu/composer.hex");
+module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter RESUME = 0, parameter FW = "core/cpu/composer.hex");
     reg clk = 0, reset_n = 0, vclk = 0;
     wire fault;
     always #6.734 clk = ~clk;
@@ -28,13 +34,14 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
 
     reg         bridge_wr = 0, bridge_rd = 0;
     reg  [31:0] bridge_addr = 0, bridge_wr_data = 0;
+    reg         ss_snap = 0, ss_restore = 0;
     wire [31:0] settings_rd_data;
     reg  [31:0] fw [0:16383];
     initial $readmemh("core/cpu/composer.hex", fw);
 
     ap_top #(.FW_HEX(FW)) dut (.clk(clk), .reset_n(reset_n),
         .bridge_wr(bridge_wr), .bridge_rd(bridge_rd), .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
-        .settings_rd_data(settings_rd_data), .rtc_epoch(32'd1760000000), .cont1_key(keys),
+        .settings_rd_data(settings_rd_data), .ss_snap(ss_snap), .ss_restore(ss_restore), .rtc_epoch(32'd1760000000), .cont1_key(keys),
         .vclk(vclk), .vsync(1'b0), .vx(10'd0), .vy(10'd0), .rgb(), .fault(fault), .tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
 .sram_a(sram_a), .sram_dq(sram_dq),
         .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n), .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n));
@@ -56,6 +63,7 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
     integer fr, n, bad, i, r, ms, cmax, gmin, gmax;
     reg [15:0] el, er;
     reg [31:0] v, f [0:7];
+    initial for (i = 0; i < 8; i = i + 1) f[i] = 0;
     task bwr(input [31:0] a, input [31:0] x);
         begin @(negedge clk); bridge_addr = a; bridge_wr_data = x; bridge_wr = 1; @(negedge clk) bridge_wr = 0; end
     endtask
@@ -118,6 +126,18 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
         $display("engine ready (SRAM cleared) at %0t ns", $time / 1000);
         while (dut.tick_n < ms) begin
             @(posedge clk);
+            // the save state load, seen by composer_tick(3): pulsed once tick 2's work is done
+            if (RESUME && dut.tick_n == 64'd2 && dut.u_sys.q != 2'd0 && !ss_restore && f[7] == 0) begin
+                f[0] = 32'h414D_5353; f[1] = 32'h0100_0005; f[2] = 32'd4242; f[3] = 32'd4242;
+                f[4] = 32'h0000_1352; f[5] = 32'd600; f[6] = 0; f[7] = chk(f[0], f[1], f[2], f[3], f[4], f[5], f[6]);
+                for (i = 0; i < 8; i = i + 1) begin
+                    bridge_addr = 32'h7000_0000 + 4 * i; bridge_wr_data = f[i]; bridge_wr = 1;
+                    @(posedge clk); #1 bridge_wr = 0;
+                end
+                repeat (4) @(posedge clk);       // the load command comes well after the writes
+                #1 ss_restore = 1; @(posedge clk); #1 ss_restore = 0;
+                if (dut.tick_n != 64'd2 || dut.u_sys.q == 2'd0) begin $display("FAIL: the load missed tick 2"); bad = bad + 1; end
+            end
             if (dut.u_sys.smp_valid) begin
                 el = {$fgetc(fr), 8'd0}; el = {$fgetc(fr), el[15:8]};
                 er = {$fgetc(fr), 8'd0}; er = {$fgetc(fr), er[15:8]};
@@ -153,6 +173,18 @@ module tb_ap_top #(parameter SLOT = 0, parameter RESTORE = 0, parameter FW = "co
             for (i = 0; i < 8; i = i + 1) begin brd(32'h6000_0000 + 4 * i, v); want_eq(v, f[i], "quit: save word"); end
             $display("quit reads: menu TIDES / 3 / 2 / High / lock / seed 4242, save file %h %h %h %h .. %h",
                      f[0], f[1], f[2], f[3], f[7]);
+        end else if (RESUME) begin
+            brd(32'h5000_0000, v); want_eq(v, 2, "resume: mode");
+            brd(32'h5000_0004, v); want_eq(v, 5, "resume: density");
+            brd(32'h5000_0014, v); want_eq(v, 1, "resume: lock seed");
+            brd(32'h5000_0018, v); want_eq(v, 4242, "resume: seed");
+            @(negedge clk) ss_snap = 1; @(negedge clk) ss_snap = 0;
+            brd(32'h7000_0000, v); want_eq(v, 32'h414D_5353, "snap: magic");
+            brd(32'h7000_0004, v); want_eq(v, 32'h0100_0005, "snap: lock, playing");
+            brd(32'h7000_000C, v); want_eq(v, 4242, "snap: session seed");
+            brd(32'h7000_0010, v); want_eq(v, 32'h0000_1352, "snap: settings");
+            brd(32'h7000_0014, v); want_eq(v, 600, "snap: elapsed");
+            $display("resume: menu HUSH / 5 / lock / seed 4242, snap hands out the resumed state");
         end else begin
             // the menu reads the composer's live values
             brd(32'h5000_0018, v);

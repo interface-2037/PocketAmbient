@@ -96,7 +96,7 @@ module tb_settings;
         bw(5, 1); check(lock && seed == 32'hCAFE0001, "lock latches the session seed");
         // 7. reseed action pulses once per write, echo or not
         bw(8, 1); bw(8, 1); repeat (2) @(negedge clk); check(pulses == 2, "reseed pulses");
-        // 7b. Pocket Lock action (D63): one pulse per write, and it is not a reseed
+        // 7b. Pocket Lock action (D64): one pulse per write, and it is not a reseed
         bw(9, 1); repeat (2) @(negedge clk);
         check(lock_pulses == 1 && pulses == 2, "pocket lock pulse");
         // 8. invalid reverb value ignored

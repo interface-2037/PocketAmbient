@@ -8,7 +8,7 @@
  *
  * Visuals setting: Full = everything, Minimal = text only, Off = black. Y (overlay) adds an
  * info box: full seed, uptime and the engine diagnostics. Nothing flashes faster than 1 Hz.
- * Pocket lock (D63, CR_LOCK): for 3 s after locking and after any button press while locked
+ * Pocket lock (D64, CR_LOCK): for 3 s after locking and after any button press while locked
  * (bit 1, timed by the hardware) a dim lock screen replaces the mode's screen; otherwise the
  * mode's screen shows as usual.
  */
@@ -417,7 +417,7 @@ static void overlay(const comp_t *c)
     fb_text(x, y, b, HI, 1, 1);
 }
 
-/* ------------------------------------------------------------------ Pocket lock (D63) */
+/* ------------------------------------------------------------------ Pocket lock (D64) */
 static void centre(int y, const char *s, unsigned col, int scale, int spacing)
 {
     fb_text(160 - fb_text_w(s, scale, spacing) / 2, y, s, col, scale, spacing);

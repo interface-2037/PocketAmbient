@@ -1,4 +1,4 @@
-// pocket_lock.sv - Pocket lock (D63): ignore the buttons while the music plays on, so the
+// pocket_lock.sv - Pocket lock (D64): ignore the buttons while the music plays on, so the
 // Pocket can go in a pocket. clk_74a.
 //
 // Lock and unlock: hold Select + Start together for HOLD cycles (2 s). The core menu's
@@ -9,7 +9,7 @@
 //   - for HINT cycles (3 s) after locking and after any button press, `hint` is high and the
 //     firmware shows its lock screen ("hold Select + Start to unlock") instead of the player
 //     screen. The screen is never blacked out: the openFPGA API has no backlight command, so a
-//     black picture would save next to no battery (D63).
+//     black picture would save next to no battery (D64).
 //
 // Start is the play / stop button and also half of the lock chord, so its press is passed on
 // when Start is released, and only if Select was not down at any time while Start was held.

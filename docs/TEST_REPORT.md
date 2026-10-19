@@ -1,5 +1,18 @@
 # Test report
 
+## v0.6.0: lock branch merged with main (2026-10-18)
+
+The Pocket lock branch (v0.5.1 / v0.5.2, results below) merged with `main` (v0.5.0: sleep D63 + menu fix D62). The lock branch's own copy of the menu fix was dropped for main's identical D62. `CR_LOCK` moved from control word 30 to **32** (sleep uses 30 / 31); `cpu_sys` decodes words 32–63 (word 32 = lock, others 0). 
+| Test | Result |
+|---|---|
+| Host `tests` (incl. main's `test_menu_after_buttons` and the sleep / resume tests) | **495,175 checks, 0 failed** |
+| `tools/check_fw.sh` 20 s, presses 3:RIGHT 4:UP, menu 7:BRIGHT=5 9:MODE=mother | firmware == host render, all four modes |
+| `tb_pocket_lock`, `tb_settings` (+ boot / cold), `tb_sleep` | **PASS** |
+| `tb_ap_top` default and `RESUME=1` (CPU + merged firmware + engine, lock and sleep RTL) | **PASS** both: 1440 samples bit-exact, CPU max 200,733 cycles/tick, frame gap 1546..1547 |
+| rvsim `--lock` with `CR_LOCK` at word 32 | lock screen drawn after the lock, player screen before |
+| Quartus (seed 2) | timing met at every corner: worst hold +0.110 ns; 12,457 ALMs (67 %), 301 / 308 RAM blocks |
+| Firmware size | 49,534 of 65,536 bytes |
+
 ## v0.5.2 on hardware (2026-10-18)
 
 Firmware-only update (same bitstream as v0.5.1). User test of `HW_TEST_NEXT.md` v0.5.2:
@@ -7,10 +20,10 @@ Firmware-only update (same bitstream as v0.5.1). User test of `HW_TEST_NEXT.md` 
 | Step | Result |
 |---|---|
 | 1. Power-cycle, version 0.5.2 | **pass** |
-| 2. Right, then a menu Brightness change: the mode stays | **pass** (the v0.5.1 failure is fixed, D64 verified) |
+| 2. Right, then a menu Brightness change: the mode stays | **pass** (the v0.5.1 failure is fixed, D62 verified) |
 | 3. Up / X / L with the buttons, then a menu Reverb change: button values kept | **pass** |
 | 4. A different Mode and a Density from the menu apply | **pass** |
-| 5. Right, then the previous mode from the menu | nothing happens, as expected (D61 / D64 limit) |
+| 5. Right, then the previous mode from the menu | nothing happens, as expected (D61 / D62 limit) |
 | 6. Pocket lock quick check | **pass** |
 
 ## v0.5.1 on hardware (2026-10-18)
@@ -19,10 +32,10 @@ Dev package, Quartus seed 2 (timing met). User test of `HW_TEST_NEXT.md` v0.5.1:
 
 | Step | Result |
 |---|---|
-| 1–9. Version 0.5.1; Start on release; lock with Select + Start (lock screen 3 s, then the player screen); locked buttons ignored and re-show the lock screen; unlock; a short chord does nothing; lock from the menu; pocket walk; a power cycle unlocks | **pass** (Pocket lock D63 verified on hardware) |
-| 10. D61 recheck: Right, then a menu Brightness change | **FAIL**: the mode changed too. Root cause and fix: D64 (firmware) |
+| 1–9. Version 0.5.1; Start on release; lock with Select + Start (lock screen 3 s, then the player screen); locked buttons ignored and re-show the lock screen; unlock; a short chord does nothing; lock from the menu; pocket walk; a power cycle unlocks | **pass** (Pocket lock D64 verified on hardware) |
+| 10. D61 recheck: Right, then a menu Brightness change | **FAIL**: the mode changed too. Root cause and fix: D62 (firmware) |
 
-## D64: menu change no longer undoes button changes (simulation, 2026-10-18)
+## D62: menu change no longer undoes button changes (simulation, 2026-10-18)
 
 | Test | Result |
 |---|---|
@@ -32,7 +45,7 @@ Dev package, Quartus seed 2 (timing met). User test of `HW_TEST_NEXT.md` v0.5.1:
 
 ## v0.5.1: Pocket lock (simulation, 2026-10-18)
 
-D63. Not yet tested on hardware (steps in `HW_TEST_NEXT.md`). Numbered v0.5.1 / D63 because the sleep / wake build on branch `claude/sleep-mode-implementation-b5d45b` is v0.5.0 / D62; this build does not include it.
+D64. Not yet tested on hardware (steps in `HW_TEST_NEXT.md`). Numbered v0.5.1 / D64 because the sleep / wake build on branch `claude/sleep-mode-implementation-b5d45b` was v0.5.0 (sleep, D63 on main after its merge); this build did not include it. Decision numbers in the sections below follow main: the lock is D64, the composer menu fix D62 (the lock branch had made the same change on its own).
 
 **Quartus build (PC, Quartus Lite 25.1std, 2026-10-18).** The default fitter seed missed hold by −0.015 ns and seed 3 by −0.078 ns, both on the frozen engine path `voice_engine` `ve_interp:u_isb` c2 → fr at the fast 1100 mV 0 °C corner (the same placement-sensitive path as v0.4.4). **Seed 2** met every corner: worst hold +0.090 ns, worst setup +1.762 ns; 12,184 ALMs (66 %), 301 / 308 RAM blocks. Packaged as `AmbientPocket-0.5.1-dev.zip` and installed on the SD card (the v0.5.0 sleep build was backed up to `dist/sd-backup-20261018-1735-v0.5.0-sleep` in the main checkout).
 
@@ -44,6 +57,52 @@ D63. Not yet tested on hardware (steps in `HW_TEST_NEXT.md`). Numbered v0.5.1 / 
 | rvsim, DRIFT, HUSH and MOTHER, seed 9, 20 s: `--ui --lock 4` vs no UI | **identical** audio (also equal to host `render`): the lock screen does not touch the composer |
 | rvsim `--frames` with `--lock`: lock screen while playing (TIDES) and stopped | `docs/ui/pocket_lock.png` (normal screen, locked while playing, locked while stopped) |
 | Firmware size | 49,166 of 65,536 bytes |
+
+## v0.5.0 combined: sleep (D63) + v0.4.5 menu fix (D62), merged on main (simulation, 2026-10-18)
+
+The sleep branch was merged into `main` together with the v0.4.5 work (D62: `read_menu()` applies mode, density, brightness and visuals only when their menu register changed). The sleep decision was renumbered D62 → D63. `do_resume()` calls `read_menu(c, 1)`, which also records the resumed settings as the last menu values seen, so a later menu change of another setting cannot restore pre-sleep values. Firmware rebuilt (49,018 of 65,536 bytes).
+
+| Test | Result |
+|---|---|
+| `tests` (all, incl. `test_menu_after_buttons` and `test_resume`) | **PASS**: 495,175 checks, 0 failed |
+| `tools/check_fw.sh 30`, and `check_fw.sh 40` with the resume script | **PASS** both, all modes |
+| `tb_sleep`, `tb_settings` | **PASS** |
+| `tb_ap_top` `RESUME=1`, default, `RESTORE=1` | **PASS**: 1440 / 1440 / 480 samples bit-exact |
+
+Not run yet: the Quartus build of the combined source, hardware (`HW_TEST_NEXT.md` v0.5.0 combined).
+
+## v0.5.0 on hardware: sleep / wake, sleep-only build (2026-10-18)
+
+Dev package `AmbientPocket-0.5.0-dev.zip` built from the sleep branch before the v0.4.5 menu fix (D62) was merged in; the combined v0.5.0 is retested with `HW_TEST_NEXT.md` (Quartus Lite 25.1std, timing met, below). User test, `HW_TEST_NEXT.md` v0.5.0:
+
+| Step | Result |
+|---|---|
+| 1. Power-cycle, version 0.5.0 | **pass** |
+| 2. Sleep while playing (click at sleep?) | **pass** |
+| 3. Wake: the same piece fades in, same seed, settings and elapsed time carry on | **pass** |
+| 4. Sleep while stopped: wakes on the title, A plays the same seed | **pass** |
+| 5. Sleep timer keeps its deadline across a sleep | **pass** |
+| 6. Memories save, switch mode, load: crossfade back | **pass** |
+| 7. Full power-off still restores the settings from `ambient.sav` | **pass** |
+| 8. Files on the card | **pass** (decoded on the PC; Notepad shows a binary file as random CJK characters). `System/user_sleepstate.sta`, 628 bytes at 16:37: `01 'SPA'`, blob size 32, file size 628, strings `beingFar`, `AmbientPocket`, `0.5.0`, `composer.bin`, `ambient`, then from byte 596 the blob `414D5353 01000000 00000000 22976085 00002141 0 0 4DDDD08A`: format 1, unlocked, title (the last sleep was while stopped), session seed `22976085`, TIDES / density 4 / brightness 1 / reverb High, check word valid. `ambient.sav`, 32 bytes at 16:40: `AMBS`, format 1, check word valid, TIDES / 2 / 3 / High |
+
+**Sleep / wake (spec HW-14, D63) is verified on hardware.**
+
+## v0.5.0: sleep / wake through a resume blob, D63 (simulation, 2026-10-18)
+
+| Test | Result |
+|---|---|
+| `tb_sleep` (new, Icarus): `sleep_state.sv` + `settings_bridge.sv`. Query (supported, `0x7000_0000`, `0x20`). Held start request: one ack, ok. Snap while TIDES / 4 / 2 / High / Minimal / 60 min plays (seed `DEADBEEF`, 3725 s), then the state changes during APF-style reads. Wake on fresh registers: the stale menu file in reset, boot, blob written while running, load. Nine rejected blobs (magic, format 2, check word, state 3, reserved bit in word 1, density 0, brightness 6, reverb 3, reserved settings bit). A Memories load while running with elapsed past 22 bits. Reset entry and exit | **PASS**: the blob is `AMSS 01000001 555 DEADBEEF` + settings + 3725 + check word, unchanged by the later state; a second snap takes the new state. After the load, `CR_RESUME` = seq 1 / playing / 3725 s, `CR_RESUME_SEED` = `DEADBEEF`, settings, Lock seed and seed 4242 from the blob, and the menu reads them back. Every rejected blob changes nothing. The second load gives seq 2 / title / elapsed clamped to `3FFFFF`. Reset entry clears the sequence. **Mutations** (each caught): check word ignored (10 FAILs), snap not latched (4), settings range check removed (6), state-3 check removed (3), reset clear removed (3), seed not restored (3) |
+| `test_resume` (new, unit) | **PASS**: a wake into TIDES at tick 50 is bit-exact with pressing A at tick 50 on the same seed (whole-run hash). The elapsed time carries on from 600 s, the fade-in is monotonic, and there is one resume for a held `CR_RESUME`. A 30 min sleep timer resumed at 29:50 fades 10 s later to exact silence. A Memories load while playing crossfades to HUSH / seed 777 with no gain dip; a stopped state loaded while playing fades to silence and the title. With no load the music is unchanged |
+| `tests` (all) | **PASS**: 495,170 checks, 0 failed |
+| `tools/check_fw.sh 30` and `check_fw.sh 40` with `SET=5:RESUME…,20:RESUME…,32:RESUME=0x03000000` (firmware on the RV32 ISS vs the host render, all modes) | **PASS** both. The resume script changes the output (DRIFT → HUSH at 5 s, MOTHER at 20 s, silence after 32 s), so the match is not trivial |
+| `tb_ap_top` `RESUME=1` (new; CPU + firmware + engine + pin-level SRAM): the blob written over the bridge at tick 2 while DRIFT plays, then the load | **PASS**: 1440 samples bit-exact with `render --mode drift --seed 123 --set 0.003:RESUME_SEED=4242,0.003:MODE=hush,0.003:DENSITY=5,0.003:SEED=4242,0.003:RESUME=0x01400258`, which differs from plain DRIFT from sample 642. The menu reads HUSH / 5 / lock / 4242, and a new snap hands out session seed 4242, settings `1352`, elapsed 600. The first run failed because the testbench pulsed the load one clock after the last blob write, before the registered blob check saw it; the APF sends the load as a separate host command much later, so the testbench now waits 4 clocks |
+| `tb_ap_top` default and `RESTORE=1`, `tb_settings` | **PASS**: unchanged (1440 / 480 samples bit-exact, CPU max 227,299 / 227,391 cycles per tick) |
+| Firmware size | 48,874 of 65,536 bytes |
+
+**Quartus Lite 25.1std (2026-10-18):** full compilation successful, 0 errors. 12,342 / 18,480 ALMs (67 %), 301 / 308 M10K (98 %, unchanged), 26 DSP. Timing met at every corner: worst setup +1.475 ns (Slow 1100 mV 0 °C, clk_74a), worst hold +0.056 ns (Fast 1100 mV 0 °C, clk_74a).
+
+Not run: Verilator `run_sys.sh` (it now passes `RESUME` / `RESUME_SEED` from `--set`), hardware (`HW_TEST_NEXT.md` v0.5.0).
 
 ## v0.4.4 on hardware (2026-10-12)
 
@@ -296,7 +355,7 @@ Build v0.2.3 (`engine_test.sv`): SRAM BIST, then recorded composer excerpts (see
 
 ## Phase 1: host model + composer (2026-10-10)
 
-Build: WinLibs GCC 16.2, `-O2`. Raw results: `reports/2026-10-09-full/` (JSON, plots, traces).
+Build: WinLibs GCC 16.2, `-O2`. Raw results (JSON, plots, traces) were kept locally in `reports/`, which is not part of the repository.
 
 ### Unit / system tests (`make test`)
 
@@ -326,7 +385,7 @@ Round 1 (2026-10-10): DRIFT and TIDES good. HUSH (nature textures) rejected as "
 Round 2 (2026-10-10): TIDES perfect. DRIFT had a "harsh noisy constant background" and HUSH "static" in the crackle → removed DRIFT's room-air bed and HUSH's rain bed, and thinned the crackle (D34). A 4th mode, **MOTHER** (Nostromo computer room, no music), was added (D35, D36).
 
 **Round 3 (2026-10-10): signed off as "good enough" by the user for all four modes.** Further musical tuning is deferred to after the hardware build (DECISIONS D39). Validation for this round:
-- `reports/2026-10-10-full/`: DRIFT, TIDES and HUSH all pass, with defaults at -19.5 / -20.7 / -19.9 LUFS.
+- (local raw results, not in the repository) `reports/2026-10-10-full/`: DRIFT, TIDES and HUSH all pass, with defaults at -19.5 / -20.7 / -19.9 LUFS.
 - `reports/2026-10-10-full-mother/`: **13 / 13**, default -21.5 LUFS. This is MOTHER retuned to the reference clip (D38): within ±3.7 dB of `reference/MOTHER.wav` from 0 Hz to 10 kHz.
 
 Unit tests: 494,960 checks, 0 failed.
