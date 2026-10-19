@@ -8,10 +8,10 @@ Both use src/fpga/output_files/ap_core.rbf; the bitstream is the same. A dev bui
 firmware data slot (pkg/data_dev.json) and ships Assets/ambient/common/composer.bin, made from
 src/fpga/core/cpu/composer.hex. To try new music on a dev build, replace that one file.
 Both declare the save slot (ambient.sav, D58); the APF creates it on Quit / power-off in
-Saves/ambient/beingFar.AmbientPocket/.
+Saves/ambient/interface2037.AmbientPocket/.
 
 dist/sdcard/
-  Cores/beingFar.AmbientPocket/  bitstream.rbf_r, core.json, audio.json, data.json, input.json,
+  Cores/interface2037.AmbientPocket/  bitstream.rbf_r, core.json, audio.json, data.json, input.json,
                                  interact.json, video.json, variants.json, icon.bin
   Platforms/ambient.json
   Platforms/_images/ambient.bin
@@ -26,7 +26,7 @@ import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-AUTHOR, CORE, PLATFORM = "beingFar", "AmbientPocket", "ambient"
+AUTHOR, CORE, PLATFORM = "interface2037", "AmbientPocket", "ambient"
 
 
 def write_firmware_bin(hex_path, out_path):

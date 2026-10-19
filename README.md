@@ -11,16 +11,16 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 
 ## Installing
 
-1. Download the latest `beingFar.AmbientPocket_<version>_<date>.zip` from the
+1. Download the latest `interface2037.AmbientPocket_<version>_<date>.zip` from the
    [Releases](https://github.com/interface-2037/PocketAmbient/releases) page (or install it with
    an updater that reads the [openFPGA Library](https://openfpga-library.github.io/analogue-pocket/)).
-2. Unzip it onto the root of the Pocket's SD card. It adds `Cores/beingFar.AmbientPocket/` and
+2. Unzip it onto the root of the Pocket's SD card. It adds `Cores/interface2037.AmbientPocket/` and
    `Platforms/ambient.json` (+ its banner). No ROM or BIOS is needed: the music is generated on
    the Pocket.
 3. On the Pocket: **openFPGA → Ambient Pocket**, then press **A** to start. Needs Pocket firmware
    1.1 or newer (`version_required` in `core.json`).
 
-Settings changed with the buttons or the menu are remembered (`Saves/ambient/beingFar.AmbientPocket/ambient.sav`).
+Settings changed with the buttons or the menu are remembered (`Saves/ambient/interface2037.AmbientPocket/ambient.sav`).
 The core supports **sleep / wake** (the piece resumes where it was) and **Memories**, and has a
 **Pocket lock** for listening with the Pocket in a pocket (hold Select + Start for 2 s, see
 Controls).
@@ -140,7 +140,7 @@ python tools/package.py
 
 This makes `dist/sdcard/` and `dist/AmbientPocket-<version>.zip` (firmware inside the
 bitstream). To install, copy the contents of `dist/sdcard/` (or of the zip) to the root of the
-Pocket's SD card, so you get `Cores/beingFar.AmbientPocket/`, `Platforms/ambient.json` and
+Pocket's SD card, so you get `Cores/interface2037.AmbientPocket/`, `Platforms/ambient.json` and
 `Platforms/_images/ambient.bin`. Power the Pocket fully off and on afterwards: it caches core
 metadata across sleep.
 

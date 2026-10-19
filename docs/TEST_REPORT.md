@@ -88,7 +88,7 @@ Dev package `AmbientPocket-0.5.0-dev.zip` built from the sleep branch before the
 | 5. Sleep timer keeps its deadline across a sleep | **pass** |
 | 6. Memories save, switch mode, load: crossfade back | **pass** |
 | 7. Full power-off still restores the settings from `ambient.sav` | **pass** |
-| 8. Files on the card | **pass** (decoded on the PC; Notepad shows a binary file as random CJK characters). `System/user_sleepstate.sta`, 628 bytes at 16:37: `01 'SPA'`, blob size 32, file size 628, strings `beingFar`, `AmbientPocket`, `0.5.0`, `composer.bin`, `ambient`, then from byte 596 the blob `414D5353 01000000 00000000 22976085 00002141 0 0 4DDDD08A`: format 1, unlocked, title (the last sleep was while stopped), session seed `22976085`, TIDES / density 4 / brightness 1 / reverb High, check word valid. `ambient.sav`, 32 bytes at 16:40: `AMBS`, format 1, check word valid, TIDES / 2 / 3 / High |
+| 8. Files on the card | **pass** (decoded on the PC; Notepad shows a binary file as random CJK characters). `System/user_sleepstate.sta`, 628 bytes at 16:37: `01 'SPA'`, blob size 32, file size 628, strings `interface2037`, `AmbientPocket`, `0.5.0`, `composer.bin`, `ambient`, then from byte 596 the blob `414D5353 01000000 00000000 22976085 00002141 0 0 4DDDD08A`: format 1, unlocked, title (the last sleep was while stopped), session seed `22976085`, TIDES / density 4 / brightness 1 / reverb High, check word valid. `ambient.sav`, 32 bytes at 16:40: `AMBS`, format 1, check word valid, TIDES / 2 / 3 / High |
 
 **Sleep / wake (spec HW-14, D63) is verified on hardware.**
 
@@ -138,9 +138,9 @@ Build on the PC (Quartus Lite 25.1std). The default fitter seed missed hold by â
 | 5. Files on the SD card | both written at the same power-off, 11:57 PDT (see below) |
 
 Files after the session (both from the last power-off, 11:57):
-- `Settings/beingFar.AmbientPocket/Interact/_core/interact_persist.json`: id1 Mode 1, id2 Density 3,
+- `Settings/interface2037.AmbientPocket/Interact/_core/interact_persist.json`: id1 Mode 1, id2 Density 3,
   id3 Brightness 1, id4 Reverb 2, id5 Visuals 0, id6 Sleep 0, id7 Lock 0.
-- `Saves/ambient/beingFar.AmbientPocket/ambient.sav`, 32 bytes, valid: `414D4253 01000000 A5B20AD1
+- `Saves/ambient/interface2037.AmbientPocket/ambient.sav`, 32 bytes, valid: `414D4253 01000000 A5B20AD1
   00002241 00000000 00000000 00000000 CBD1BC75`. Word 3: TIDES, density 4, brightness 2, reverb High,
   visuals Full, sleep Off. Word 1 was reported as `00000001`, but the check word `CBD1BC75` matches only
   `01000000` (format 1, lock off, as the menu file's Lock 0 says). `00000001` gives `CDD1BC73`.

@@ -5,7 +5,7 @@
             "platform_ids": ["ambient"],
             "shortname": "AmbientPocket",
             "description": "Generative ambient music: DRIFT, TIDES, HUSH and MOTHER.",
-            "author": "beingFar",
+            "author": "interface2037",
             "url": "https://github.com/interface-2037/PocketAmbient",
             "version": "0.6.0",
             "date_release": "2026-10-18"
