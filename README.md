@@ -6,8 +6,26 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 |---|---|
 | **DRIFT** | Cold, sparse, orchestral: dark strings, a lonely distant horn, an echoing flute, a low drone, icy clusters and rare stingers, built on silence and dissonance (Alien-era Goldsmith) |
 | **TIDES** | Blade Runner / CS-80: swelling detuned brass pads with filter sweeps, vibrato and glide, a sparse melody with pitch "sighs", bells, distant thunder, huge reverb |
-| **HUSH** | A lo-fi beat: swung boom-bap drums, jazzy electric-piano chords with tape wow, sine bass, sparse plucked lead, faint vinyl crackle |
-| **MOTHER** | No music: the Nostromo's computer room. Chirping data blips, printout chatter, and a very rare motion-tracker sequence, driven by a wandering system-activity level |
+| **HUSH** | A lo-fi beat: swung boom-bap drums, jazzy electric-piano chords with tape wow, sine bass, sparse plucked lead |
+| **MOTHER** | No music: the Nostromo's computer room. Sine chirps, a low rumbling hum, vent hiss and clunks, and a very rare motion-tracker sequence, driven by a wandering system-activity level |
+
+## Installing
+
+1. Download the latest `beingFar.AmbientPocket_<version>_<date>.zip` from the
+   [Releases](https://github.com/interface-2037/PocketAmbient/releases) page (or install it with
+   an updater that reads the [openFPGA Library](https://openfpga-library.github.io/analogue-pocket/)).
+2. Unzip it onto the root of the Pocket's SD card. It adds `Cores/beingFar.AmbientPocket/` and
+   `Platforms/ambient.json` (+ its banner). No ROM or BIOS is needed: the music is generated on
+   the Pocket.
+3. On the Pocket: **openFPGA → Ambient Pocket**, then press **A** to start. Needs Pocket firmware
+   1.1 or newer (`version_required` in `core.json`).
+
+Settings changed with the buttons or the menu are remembered (`Saves/ambient/beingFar.AmbientPocket/ambient.sav`).
+The core supports **sleep / wake** (the piece resumes where it was) and **Memories**, and has a
+**Pocket lock** for listening with the Pocket in a pocket (hold Select + Start for 2 s, see
+Controls).
+
+## Development
 
 `AMBIENT_POCKET_CORE_SPEC.md` is the original specification (written as a hand-off brief).
 Where it differs from the code (four modes instead of three, clang instead of GCC for the
@@ -150,16 +168,17 @@ metadata across sleep.
 | Y | Info overlay |
 | Select + Start, held 2 s | Pocket lock on / off (D64) |
 
-Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/High, visuals, sleep timer Off/30/60/90 min, Lock seed (keeps the piece playing now for the next boot) + the seed value, a Reseed action and a Pocket Lock action.
+Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/High, visuals, sleep timer Off/30/60/90 min, Lock seed (keeps the piece playing now for the next boot) + the seed value, a Reseed action and a Pocket Lock action. The menu shows live values, so button changes appear there too, and settings persist.
 
-**Pocket lock (D64).** For listening with the Pocket in a pocket or bag: hold **Select + Start** for 2 seconds (or choose **Pocket Lock** in the core menu). The music keeps playing and every button is ignored. A lock screen shows for 3 seconds after locking and after any press, then the player screen returns; hold Select + Start for 2 seconds again to unlock. The lock does not survive a power cycle. A core cannot turn the Pocket's backlight off (the openFPGA API has no command for it), so the screen stays on; lower the brightness in the Pocket's own settings for longer battery life. The Home button (Pocket menu) and the power button are handled by the Pocket itself and are not locked. The menu shows live values, so button changes appear there too, and settings persist.
+**Pocket lock (D64).** For listening with the Pocket in a pocket or bag: hold **Select + Start** for 2 seconds (or choose **Pocket Lock** in the core menu). The music keeps playing and every button is ignored. A lock screen shows for 3 seconds after locking and after any press, then the player screen returns; hold Select + Start for 2 seconds again to unlock. The lock does not survive a power cycle. A core cannot turn the Pocket's backlight off (the openFPGA API has no command for it), so the screen stays on; lower the brightness in the Pocket's own settings for longer battery life. The Home button (Pocket menu) and the power button are handled by the Pocket itself and are not locked.
 
 ## Known limitations
 
 - Y shows the engine diagnostics (CPU, FIFO, underruns, frame-tick gaps); a red screen means the
   composer CPU stopped.
-- After a setting was changed with the buttons, choosing in the core menu the exact value the
-  menu last set for it does nothing; pick another value or use the buttons (D61).
+- After a setting was changed with the buttons, choosing in the core menu the value the menu
+  last set for it does nothing (e.g. back to the starting mode); pick another value or use the
+  buttons (D61, D62).
 - The MOTHER tone was tuned against a private reference recording (`reference/MOTHER.wav`, used
   by `tools/compare_reference.py`). It is not part of this repository.
 - The host renderer's speed depends on the compiler and platform: it was measured at ~90–140×
@@ -170,3 +189,7 @@ Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/
 Ambient Pocket is licensed under the GNU General Public License v3.0 (`LICENSE`). Files from
 Analogue's openFPGA core template, Intel/Altera-generated IP and PicoRV32 keep their own
 licenses; see `THIRD_PARTY_NOTICES.md`.
+
+## Legal
+
+Analogue's Development program was created to further video game hardware preservation with FPGA technology. Analogue Developers have access to Analogue Pocket I/O's so Developers can utilize cartridge adapters or interface with other pieces of original or bespoke hardware to support legacy media. Analogue does not support or endorse the unauthorized use or distribution of material protected by copyright or other intellectual property rights.
