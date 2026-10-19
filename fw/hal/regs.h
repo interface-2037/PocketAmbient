@@ -148,6 +148,11 @@ static const unsigned AP_AP_LEN[4] = { 142, 107, 379, 277 };
 #define CR_DIAG_FIFO     27  /* [15:0] lowest audio-FIFO level since it primed */
 #define CR_DIAG_UNDERRUN 28  /* audio-FIFO underruns */
 #define CR_DIAG_FRAME    29  /* [31:16] shortest, [15:0] longest frame-tick gap (clk_74a cycles) */
+/* save state to resume (sleep / wake, Memories load; D63). The hardware has already put the
+ * blob's settings, Lock seed and seed in CR_MODE..CR_SLEEP, without CR_SETTINGS_SEQ. */
+#define CR_RESUME        30  /* [31:24] sequence (+1 per valid load, 0 after reset), [23:22] state
+                                (CS_*), [21:0] elapsed play time in s */
+#define CR_RESUME_SEED   31  /* the session seed to resume */
 #define CR_NUM_REGS      32
 
 /* ---- Video control (AP_MMIO_VIDEO, word index) ---- */

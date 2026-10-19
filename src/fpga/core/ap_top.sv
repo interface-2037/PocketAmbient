@@ -1,8 +1,8 @@
 // ap_top.sv - the Ambient Pocket core below core_top (v0.4.x), all in clk_74a except video:
 // the composer firmware on the PicoRV32 drives the audio engine (cpu_sys) and draws the
 // screens into fb_video; the Pocket's buttons go to the composer, the core menu to
-// settings_bridge (pkg/interact.json, and the save slot ambient.sav), and dev builds load the
-// firmware from the SD card.
+// settings_bridge (pkg/interact.json, the save slot ambient.sav and the sleep save state), and dev
+// builds load the firmware from the SD card.
 // Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
 // `fault` (CPU trap or bus error) makes core_top show a red screen.
 `default_nettype none
@@ -17,7 +17,10 @@ module ap_top #(
     input  wire        bridge_rd,
     input  wire [31:0] bridge_addr,
     input  wire [31:0] bridge_wr_data,
-    output wire [31:0] settings_rd_data,   // bridge reads of 0x5000_00xx (menu), 0x6000_00xx (save)
+    output wire [31:0] settings_rd_data,   // bridge reads of 0x5000_00xx (menu), 0x6000_00xx (save),
+                                           // 0x7000_00xx (save state, D63)
+    input  wire        ss_snap,            // sleep_state.sv pulses: latch the save state image /
+    input  wire        ss_restore,         // apply the save state the APF wrote
     input  wire [31:0] rtc_epoch,
     input  wire [31:0] cont1_key,
     input  wire        tick,               // 48 kHz frame tick (start of a stereo frame)
@@ -70,17 +73,19 @@ module ap_top #(
         .sram_a(sram_a), .sram_dq(sram_dq), .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n),
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n));
 
-    wire [31:0] st_state, st_mode, st_seed, st_density, st_bright, st_visuals, st_reverb, st_sleep;
+    wire [31:0] st_state, st_elapsed, st_mode, st_seed, st_density, st_bright, st_visuals, st_reverb, st_sleep;
     wire [31:0] tick_cyc, tick_cyc_max;
     wire        st_valid;
     wire  [2:0] cfg_mode, cfg_density, cfg_bright;
     wire  [1:0] cfg_reverb, cfg_visuals, cfg_sleep;
     wire        cfg_seed_lock, cmd_reseed;
-    wire [31:0] cfg_seed, settings_seq;
+    wire [31:0] cfg_seed, settings_seq, resume_info, resume_seed;
     settings_bridge u_set (.clk(clk), .rst(rst), .bridge_wr(bridge_wr), .bridge_rd(bridge_rd),
         .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data), .bridge_rd_data(settings_rd_data),
         .st_valid(st_valid), .st_mode(st_mode[2:0]), .st_density(st_density[2:0]), .st_bright(st_bright[2:0]),
         .st_reverb(st_reverb[1:0]), .st_visuals(st_visuals[1:0]), .st_sleep(st_sleep[1:0]), .st_seed(st_seed),
+        .st_state(st_state[1:0]), .st_elapsed(st_elapsed), .ss_snap(ss_snap), .ss_restore(ss_restore),
+        .resume_info(resume_info), .resume_seed(resume_seed),
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
         .settings_seq(settings_seq), .cmd_reseed(cmd_reseed));
@@ -92,12 +97,13 @@ module ap_top #(
     cpu_sys #(.FW_HEX(FW_HEX)) u_sys (.clk(clk), .rst(rst),
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
-        .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .rtc_epoch(rtc_epoch), .btn_edge(btn_edge),
+        .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .resume_info(resume_info), .resume_seed(resume_seed),
+        .rtc_epoch(rtc_epoch), .btn_edge(btn_edge),
         .fw_we(fw_we), .fw_addr(fw_addr), .fw_data(fw_data),
         .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(rgb), .diag_frame({gap_min, gap_max}),
         .frame_tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
         .mem_req(m_req), .mem_we(m_we), .mem_addr(m_addr), .mem_wd(m_wd), .mem_ack(m_ack), .mem_rd(m_rd),
-        .st_state(st_state), .st_mode(st_mode), .st_elapsed(), .st_seed(st_seed), .st_density(st_density),
+        .st_state(st_state), .st_mode(st_mode), .st_elapsed(st_elapsed), .st_seed(st_seed), .st_density(st_density),
         .st_bright(st_bright), .st_visuals(st_visuals), .st_overlay(), .st_reverb(st_reverb), .st_sleep(st_sleep),
         .st_valid(st_valid),
         .tick(tick_n), .tick_cycles(tick_cyc), .tick_cycles_max(tick_cyc_max), .underruns(underruns),

@@ -179,6 +179,7 @@ struct comp {
     uint64_t now, play_start, state_t;
     uint32_t settings_seq;
     uint32_t menu_seen[4];          /* CR_MODE, CR_DENSITY, CR_BRIGHT, CR_VISUALS as last read (D62) */
+    uint8_t  resume_seq;            /* CR_RESUME sequence last handled (D63) */
     prng_t   r_harm, r_rhythm, r_timbre, r_form, r_meta;
     sched_t  sched;
     weather_t wx;
