@@ -764,3 +764,5 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to sram_we_n
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to sram_dq[*]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to sram_dq[*]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to sram_dq[*]
+
+set_global_assignment -name SEED 2

@@ -1,19 +1,20 @@
-# Hardware test: v0.5.0
+# Hardware test: v0.5.1
 
-Dev package (`AmbientPocket-0.5.0-dev.zip`). Copy it to the SD card as usual, including
+Dev package (`AmbientPocket-0.5.1-dev.zip`). Copy it to the SD card as usual, including
 `Assets/ambient/common/composer.bin`. New in this build:
 
-- **Pocket lock (D62).** Hold **Select + Start** for 2 seconds (or use **Pocket Lock** in the
+- **Pocket lock (D63).** Hold **Select + Start** for 2 seconds (or use **Pocket Lock** in the
   core menu): the buttons are ignored while the music keeps playing. A lock screen shows for
   3 seconds, then the player screen returns. Hold Select + Start for 2 seconds again to unlock.
   Start now acts when it is **released**.
 - **D61** (not yet tested on hardware): a menu change after a button mode change no longer
   reverts the mode.
 
-No change to the music. Note the step number of anything that fails.
+This build branches from main and does **not** include the sleep / wake feature of the other
+v0.5.0 build (branch `claude/sleep-mode-implementation-b5d45b`, D62). No change to the music. Note the step number of anything that fails.
 
 1. **Power-cycle first.** Turn the Pocket fully off and on again, then check that the core info
-   shows version **0.5.0**.
+   shows version **0.5.1**.
 2. **Start still plays and stops.** Press and release **Start**: the music fades in when you
    **release** it. Press and release Start again: it fades out. **A** still acts as soon as it is
    pressed.

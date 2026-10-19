@@ -103,11 +103,11 @@ On Linux/WSL2 use `make` and `./build/render`. `tools/run_validation.sh full` ru
 | L / R | Brightness 1–5 |
 | X | Visuals: Full → Minimal → Off |
 | Y | Info overlay |
-| Select + Start, held 2 s | Pocket lock on / off (D62) |
+| Select + Start, held 2 s | Pocket lock on / off (D63) |
 
 Menu settings (`interact.json`, D51): mode, density, brightness, reverb Low/Med/High, visuals, sleep timer Off/30/60/90 min, Lock seed (keeps the piece playing now for the next boot) + the seed value, a Reseed action and a Pocket Lock action.
 
-**Pocket lock (D62).** For listening with the Pocket in a pocket or bag: hold **Select + Start** for 2 seconds (or choose **Pocket Lock** in the core menu). The music keeps playing and every button is ignored. A lock screen shows for 3 seconds after locking and after any press, then the player screen returns; hold Select + Start for 2 seconds again to unlock. The lock does not survive a power cycle. A core cannot turn the Pocket's backlight off (the openFPGA API has no command for it), so the screen stays on; lower the brightness in the Pocket's own settings for longer battery life. The Home button (Pocket menu) and the power button are handled by the Pocket itself and are not locked. The menu shows live values, so button changes appear there too, and settings persist.
+**Pocket lock (D63).** For listening with the Pocket in a pocket or bag: hold **Select + Start** for 2 seconds (or choose **Pocket Lock** in the core menu). The music keeps playing and every button is ignored. A lock screen shows for 3 seconds after locking and after any press, then the player screen returns; hold Select + Start for 2 seconds again to unlock. The lock does not survive a power cycle. A core cannot turn the Pocket's backlight off (the openFPGA API has no command for it), so the screen stays on; lower the brightness in the Pocket's own settings for longer battery life. The Home button (Pocket menu) and the power button are handled by the Pocket itself and are not locked. The menu shows live values, so button changes appear there too, and settings persist.
 
 ## Known limitations
 

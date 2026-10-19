@@ -1,8 +1,10 @@
 # Test report
 
-## v0.5.0: Pocket lock (simulation, 2026-10-18)
+## v0.5.1: Pocket lock (simulation, 2026-10-18)
 
-D62. Not yet built in Quartus or tested on hardware (steps in `HW_TEST_NEXT.md`).
+D63. Not yet tested on hardware (steps in `HW_TEST_NEXT.md`). Numbered v0.5.1 / D63 because the sleep / wake build on branch `claude/sleep-mode-implementation-b5d45b` is v0.5.0 / D62; this build does not include it.
+
+**Quartus build (PC, Quartus Lite 25.1std, 2026-10-18).** The default fitter seed missed hold by −0.015 ns and seed 3 by −0.078 ns, both on the frozen engine path `voice_engine` `ve_interp:u_isb` c2 → fr at the fast 1100 mV 0 °C corner (the same placement-sensitive path as v0.4.4). **Seed 2** met every corner: worst hold +0.090 ns, worst setup +1.762 ns; 12,184 ALMs (66 %), 301 / 308 RAM blocks. Packaged as `AmbientPocket-0.5.1-dev.zip` and installed on the SD card (the v0.5.0 sleep build was backed up to `dist/sd-backup-20261018-1735-v0.5.0-sleep` in the main checkout).
 
 | Test | Result |
 |---|---|

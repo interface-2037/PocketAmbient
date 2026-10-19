@@ -4,7 +4,7 @@
 //   0x5000_0000, one 32-bit word per setting:
 //   0x00 Mode 0-3        0x04 Density 1-5     0x08 Brightness 1-5    0x0C Reverb 0-2
 //   0x10 Visuals 0-2     0x14 Lock seed 0/1   0x18 Seed (u32)        0x1C Sleep 0-3
-//   0x20 Reseed (action, write-only)   0x24 Pocket Lock (action, write-only, D62)
+//   0x20 Reseed (action, write-only)   0x24 Pocket Lock (action, write-only, D63)
 //
 //   0x6000_0000, the save slot (8 words = the 32-byte file, word 0 = file bytes 0..3, MSB first):
 //   0 magic "AMBS"   1 {format 1, 23'd0, lock}   2 seed   3 settings (see img3)   4-6 0

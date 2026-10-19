@@ -2,7 +2,7 @@
 // the composer firmware on the PicoRV32 drives the audio engine (cpu_sys) and draws the
 // screens into fb_video; the Pocket's buttons go to the composer, the core menu to
 // settings_bridge (pkg/interact.json, and the save slot ambient.sav), and dev builds load the
-// firmware from the SD card. pocket_lock sits between the buttons and the composer (D62).
+// firmware from the SD card. pocket_lock sits between the buttons and the composer (D63).
 // Defaults: DRIFT, density 3, brightness 3, reverb Med, seed from the RTC (Lock seed off).
 // `fault` (CPU trap or bus error) makes core_top show a red screen.
 `default_nettype none
@@ -48,7 +48,7 @@ module ap_top #(
     always @(posedge clk) begin k0 <= cont1_key[15:0]; k1 <= k0; k2 <= k1; end
     wire [15:0] key_edge = rst ? 16'd0 : (k1 & ~k2);
 
-    // ------------------------------------------------------------- Pocket lock (D62)
+    // ------------------------------------------------------------- Pocket lock (D63)
     wire [15:0] btn_edge;
     wire        locked, lock_hint, cmd_lock;
     pocket_lock u_lock (.clk(clk), .rst(rst), .keys(k1), .edges(key_edge), .menu_lock(cmd_lock),

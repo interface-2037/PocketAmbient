@@ -1,4 +1,4 @@
-// tb_pocket_lock.sv - unit test of pocket_lock.sv (D62) with short HOLD / HINT times.
+// tb_pocket_lock.sv - unit test of pocket_lock.sv (D63) with short HOLD / HINT times.
 //   iverilog -g2012 -s tb_pocket_lock -o sim/out/tb_pocket_lock.vvp sim/tb/tb_pocket_lock.sv src/fpga/core/pocket_lock.sv
 //   vvp -n sim/out/tb_pocket_lock.vvp
 `timescale 1ns/1ps
