@@ -1,5 +1,18 @@
 # Test report
 
+## v0.5.2 on hardware (2026-10-18)
+
+Firmware-only update (same bitstream as v0.5.1). User test of `HW_TEST_NEXT.md` v0.5.2:
+
+| Step | Result |
+|---|---|
+| 1. Power-cycle, version 0.5.2 | **pass** |
+| 2. Right, then a menu Brightness change: the mode stays | **pass** (the v0.5.1 failure is fixed, D64 verified) |
+| 3. Up / X / L with the buttons, then a menu Reverb change: button values kept | **pass** |
+| 4. A different Mode and a Density from the menu apply | **pass** |
+| 5. Right, then the previous mode from the menu | nothing happens, as expected (D61 / D64 limit) |
+| 6. Pocket lock quick check | **pass** |
+
 ## v0.5.1 on hardware (2026-10-18)
 
 Dev package, Quartus seed 2 (timing met). User test of `HW_TEST_NEXT.md` v0.5.1:
