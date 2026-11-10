@@ -833,6 +833,16 @@ TEST(test_resume)
           "sleep timer after a resume: state %u, %llu samples after the fade", composer_state()->state,
           (unsigned long long)to.nonzero_after);
 
+    /* 2b. A during the sleep timer's fade-out cancels it: the piece fades back in and plays on
+     * (before, the timer stopped it again in the same tick and the press was lost) */
+    run_cfg_t a = t;
+    run_out_t ao = {0};
+    a.press[0].at = AT + 10000 + 5000; a.press[0].btn = BTN_A; a.npress = 1;
+    a.ms = AT + 10000 + 5000 + 40000;
+    run_system(&a, &ao);
+    CHECK(composer_state()->state == CS_PLAYING && S.fx[FX_MASTER_TARGET] == (1u << 23),
+          "A in the sleep fade: state %u, gain target %u", composer_state()->state, S.fx[FX_MASTER_TARGET]);
+
     /* 3. a Memories load while playing: a crossfade to the new piece, no gain dip */
     run_cfg_t m = {0};
     run_out_t mo = {0};

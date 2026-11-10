@@ -19,8 +19,6 @@ static const mode_ops_t *const MODES[MODE_COUNT] = {
 #define ECHO_LEN_L     20640u   /* 430 ms */
 #define ECHO_LEN_R     29280u   /* 610 ms */
 
-static uint32_t g_stop_ms;
-
 /* ------------------------------------------------------------------ helpers */
 
 int32_t c_lerp_q8(const int32_t tbl[5], int32_t q8)
@@ -197,12 +195,15 @@ static void set_state(comp_t *c, uint8_t st)
 static void do_start(comp_t *c)
 {
     if (c->state == CS_STOPPING) {           /* change of heart: fade back in */
+        /* The sleep timer starts over: after its own fade-out it would otherwise stop the
+         * piece again in this same tick, and A could not cancel the fade. */
+        c->sleep_start = c->now;
         master_fade(GAIN_UNITY, FADE_IN_MS);
         set_state(c, CS_PLAYING);
         if (c->m_mode != c->mode) mode_begin(c, XFADE_MS);   /* the piece ended during the fade */
         return;
     }
-    c->play_start = c->now;
+    c->play_start = c->sleep_start = c->now;
     set_state(c, CS_PLAYING);
     mode_begin(c, 0);
     master_fade(GAIN_UNITY, FADE_IN_MS);
@@ -210,7 +211,7 @@ static void do_start(comp_t *c)
 
 static void do_stop(comp_t *c, uint32_t fade_ms)
 {
-    g_stop_ms = fade_ms;
+    c->stop_ms = fade_ms;
     master_fade(0, fade_ms);
     set_state(c, CS_STOPPING);
 }
@@ -274,7 +275,9 @@ static void read_menu(comp_t *c, int first)
     uint8_t rv = (uint8_t)(hal_ctrl_read(CR_REVERB) % 3);
     c->seed_lock = (uint8_t)(hal_ctrl_read(CR_SEED_LOCK) & 1);
     c->user_seed = hal_ctrl_read(CR_SEED);
-    c->sleep_sel = (uint8_t)(hal_ctrl_read(CR_SLEEP) & 3);
+    uint8_t sl = (uint8_t)(hal_ctrl_read(CR_SLEEP) & 3);
+    if (!first && sl != c->sleep_sel) c->sleep_start = c->now;   /* a new setting counts from now */
+    c->sleep_sel = sl;
     if (first || dn != c->menu_seen[1]) c->density = clamp15((int)dn);
     if (first || br != c->menu_seen[2]) c->bright = clamp15((int)br);
     if (first || vi != c->menu_seen[3]) c->visuals = (uint8_t)(vi % 3);
@@ -309,7 +312,7 @@ static void do_resume(comp_t *c, uint32_t info, uint32_t seed)
             mode_begin(c, was == CS_STOPPING ? XFADE_MS : 0);
             master_fade(GAIN_UNITY, FADE_IN_MS);
         }
-        c->play_start = c->now - (uint64_t)(info & 0x3FFFFFu) * 1000u;
+        c->play_start = c->sleep_start = c->now - (uint64_t)(info & 0x3FFFFFu) * 1000u;
     } else if (was == CS_PLAYING) {
         do_stop(c, FADE_OUT_MS);      /* the piece has ended: its tail fades, FX change at 0 */
     } else if (was == CS_TITLE) {
@@ -398,10 +401,10 @@ void composer_tick(void)
 
     if (c->state == CS_PLAYING && c->sleep_sel) {
         static const uint32_t sleep_min[4] = {0, 30, 60, 90};
-        if (c->now - c->play_start >= (uint64_t)MIN(sleep_min[c->sleep_sel]))
+        if (c->now - c->sleep_start >= (uint64_t)MIN(sleep_min[c->sleep_sel]))
             do_stop(c, SLEEP_FADE_MS);
     }
-    if (c->state == CS_STOPPING && c->now - c->state_t >= (uint64_t)g_stop_ms + 50) {
+    if (c->state == CS_STOPPING && c->now - c->state_t >= (uint64_t)c->stop_ms + 50) {
         /* master gain is now exactly 0: silence everything and go back to the title */
         sched_init(&c->sched);
         voices_kill_all(env_release_ms(50));

@@ -153,10 +153,12 @@ static int live(const comp_t *c)
     return c->state != CS_TITLE && c->m_mode == c->mode;
 }
 
-static const drift_t  D_IDLE;
-static const tides_t  T_IDLE;
-static const hush_t   H_IDLE;
-static const mother_t O_IDLE;
+/* A frame is drawn over many ticks (fb_yield), and the composer may change mode or end the piece
+ * in between, which rewrites c->m as another mode's state. So each frame draws from a copy taken
+ * at its start (ui_frame, no yield in between): the mode shown, whether its state is live, and
+ * the state itself, zeroed when it is not live. */
+static mode_state_t M;
+static uint8_t      m_mode, m_on;
 
 static uint32_t elapsed_s(const comp_t *c)
 {
@@ -173,7 +175,7 @@ static void readouts(const comp_t *c, const char *xl, const char *xv)
     put_u(b, c->bright, 1);         boxed(x, y, "BRIGHT", b);  y += 30;
     put_hex(b, c->sess_seed & 0xFFFFu, 4); boxed(x, y, "SEED", b); y += 30;
     boxed(x, y, xl, xv);            y += 30;
-    put_u(put_s(b, "# "), c->mode + 1u, 1); boxed(x, y, "SYSTEM", b);
+    put_u(put_s(b, "# "), m_mode + 1u, 1); boxed(x, y, "SYSTEM", b);
     static const char *SL[4] = {"OFF", "30 MIN", "60 MIN", "90 MIN"};
     fb_text(x, 260, "SLEEP", TXT, 1, 1);
     fb_rect(x, 270, x + 80, 280, LINE);
@@ -206,8 +208,8 @@ static void press_a(const comp_t *c, int y, unsigned col)
 /* ------------------------------------------------------------------ DRIFT */
 static void drift(const comp_t *c, int full)
 {
-    const int on = live(c);
-    const drift_t *d = on ? &c->m.d : &D_IDLE;
+    const int on = m_on;
+    const drift_t *d = &M.d;
     char x[16], b[48], *p;
     put_frac2(x, d->tension);
     base(c, "DRIFT", "TENSION", on ? x : "--", full, 244);
@@ -256,8 +258,8 @@ static void drift(const comp_t *c, int full)
 /* ------------------------------------------------------------------ TIDES */
 static void tides(const comp_t *c, int full)
 {
-    const int on = live(c);
-    const tides_t *t = on ? &c->m.t : &T_IDLE;
+    const int on = m_on;
+    const tides_t *t = &M.t;
     char x[16], b[24], *p;
     put_chord(x, t->key, CHORD_VOCAB[(unsigned)t->chord % CHORD_VOCAB_N], 1);
     base(c, "TIDES", "CHORD", on ? x : "--", 0, 0);
@@ -299,8 +301,8 @@ static void tides(const comp_t *c, int full)
 /* ------------------------------------------------------------------ HUSH */
 static void hush(const comp_t *c, int full, int brk)
 {
-    const int on = live(c);
-    const hush_t *h = on ? &c->m.h : &H_IDLE;
+    const int on = m_on;
+    const hush_t *h = &M.h;
     char b[48], *p;
     fb_text(16, 14, "HUSH", TXT, 3, 1);
     fb_text(196, 22, "LOFI CTR", TXT, 1, 2);
@@ -350,8 +352,8 @@ static void hush(const comp_t *c, int full, int brk)
 /* ------------------------------------------------------------------ MOTHER */
 static void mother(const comp_t *c, int full)
 {
-    const int on = live(c);
-    const mother_t *o = on ? &c->m.o : &O_IDLE;
+    const int on = m_on;
+    const mother_t *o = &M.o;
     char x[16], b[40], *p;
     put_frac2(x, o->activity);
     base(c, "MOTHER", "ACTIVITY", on ? x : "--", full, 0);
@@ -436,7 +438,7 @@ static void lock_screen(const comp_t *c)
     centre(140, "LOCKED", HI, 3, 1);
     centre(186, "HOLD SELECT + START", TXT, 1, 1);
     centre(200, "FOR 2 SECONDS TO UNLOCK", TXT, 1, 1);
-    put_hms(put_s(put_s(b, NAME[c->mode & 3u]), "  "), elapsed_s(c));
+    put_hms(put_s(put_s(b, NAME[m_mode & 3u]), "  "), elapsed_s(c));
     centre(256, c->state == CS_TITLE ? "STOPPED" : b, LINE, 1, 1);
 }
 
@@ -463,7 +465,11 @@ void ui_frame(void)
     }
     started = 1;
     last_frame = c->now;
-    int brk = c->mode == MODE_HUSH && live(c) && c->m.h.section == S_BREAK;
+    m_mode = c->mode;                                              /* this frame's copy (see M) */
+    m_on = (uint8_t)live(c);
+    if (m_on) M = c->m;
+    else { static const mode_state_t idle; M = idle; }
+    int brk = m_mode == MODE_HUSH && m_on && M.h.section == S_BREAK;
     if (CR(CR_LOCK) & 2u) {
         lock_screen(c);
         fb_swap();
@@ -476,10 +482,10 @@ void ui_frame(void)
         return;
     }
     static const uint32_t *const PAL[4] = {PAL_DRIFT, PAL_TIDES, PAL_HUSH, PAL_MOTHER};
-    fb_palette(brk ? PAL_BREAK : PAL[c->mode & 3u]);
+    fb_palette(brk ? PAL_BREAK : PAL[m_mode & 3u]);
     fb_clear(BG);
     int full = c->visuals == 0;
-    switch (c->mode) {
+    switch (m_mode) {
     case MODE_DRIFT: drift(c, full); break;
     case MODE_TIDES: tides(c, full); break;
     case MODE_HUSH:  hush(c, full, brk); break;
