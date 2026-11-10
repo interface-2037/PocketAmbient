@@ -1,7 +1,8 @@
 /*
  * hal_mmio.c - RISC-V (PicoRV32) HAL: memory-mapped registers (fw/hal/regs.h).
- * Not compiled on the host. Voice/FX writes land in shadow registers that the
- * engine commits at the next tick boundary; status reads are tick snapshots.
+ * Not compiled on the host. The CPU runs only while the engine is idle, so voice and FX writes
+ * go straight to the engine and take effect at the next tick boundary; status reads are
+ * tick-boundary snapshots (D48: no shadow registers).
  */
 #include "hal.h"
 #include "../ui/ui.h"
