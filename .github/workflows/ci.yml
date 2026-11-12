@@ -33,9 +33,13 @@ jobs:
         run: |
           sudo apt-get install -y lld llvm
           make build/render build/rvsim
+          # the committed image first (it goes into the bitstream): make fw overwrites it
+          tools/check_fw.sh 10
           make fw PYTHON=python
           tools/check_fw.sh 10 build/fw/composer.bin
-          tools/check_fw.sh 10
+          # with the screen code running, buttons and menu changes
+          UI=1 PRESS=2:RIGHT,3:B,4:A,4.5:LEFT,5:A,6:UP,7:X,8:Y SET=5.5:MODE=tides,6.5:REVERB=2 \
+            tools/check_fw.sh 10 build/fw/composer.bin
       - name: Long unit tests (on request)
         if: github.event_name == 'workflow_dispatch' && inputs.long
         run: ./build/tests --long
@@ -68,6 +72,24 @@ jobs:
           iverilog -g2012 -o tb_settings.vvp sim/tb/tb_settings.sv src/fpga/core/settings_bridge.sv src/fpga/core/slot_size.sv
           vvp -n tb_settings.vvp | tee tb_settings.log
           grep -q "^PASS" tb_settings.log
+      - name: Sleep / wake, Pocket lock and SRAM controller unit tests
+        run: |
+          F=src/fpga/core
+          iverilog -g2012 -o tb_sleep.vvp sim/tb/tb_sleep.sv $F/settings_bridge.sv $F/sleep_state.sv
+          iverilog -g2012 -o tb_pocket_lock.vvp sim/tb/tb_pocket_lock.sv $F/pocket_lock.sv
+          iverilog -g2012 -o tb_sram.vvp sim/tb/tb_sram.sv sim/tb/async_sram_model.sv $F/synth/sram_ctrl.sv
+          for t in tb_sleep tb_pocket_lock tb_sram; do
+            vvp -n $t.vvp | tee $t.log
+            grep -q "^PASS" $t.log && ! grep -q "^FAIL" $t.log
+          done
+      - name: Lint (no latches, multiple drivers, combinational loops or undriven nets)
+        run: |
+          F=src/fpga/core
+          verilator --lint-only -Wall -Wno-fatal --top-module ap_top $F/ap_top.sv $F/pocket_lock.sv \
+            $F/settings_bridge.sv $F/cpu/cpu_sys.sv $F/ui/fb_video.sv $F/cpu/picorv32.v $F/synth/audio_engine.sv \
+            $F/synth/voice_engine.sv $F/synth/fx_engine.sv $F/synth/sram_ctrl.sv > lint.log 2>&1 || true
+          grep -c "^%Warning" lint.log || true
+          ! grep -E "^%Error|^%Warning-(LATCH|MULTIDRIVEN|UNOPTFLAT|COMBDLY|CASEINCOMPLETE|UNDRIVEN|IMPLICIT)" lint.log
       - name: Full system (CPU + firmware + engine) == host render, 2 s per mode, with menu changes
         run: make build/render && SET=0.5:MODE=tides,1:RESEED=1,1.5:DENSITY=5 FAST=1 sim/run_sys.sh 2
   # Quartus builds are not run in CI; build locally (README). Do not attach a self-hosted runner

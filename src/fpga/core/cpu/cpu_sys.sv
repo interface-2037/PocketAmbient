@@ -40,7 +40,7 @@ module cpu_sys #(
     input  wire [31:0] resume_info,        // CR_RESUME / CR_RESUME_SEED: save state to resume (D63)
     input  wire [31:0] resume_seed,
     input  wire [31:0] rtc_epoch,
-    input  wire [15:0] btn_edge,           // pressed-edge pulses (debounced), regs.h BTN_* bits
+    input  wire [15:0] btn_edge,           // pressed-edge pulses (synchronised, edge-detected), regs.h BTN_* bits
     input  wire  [1:0] lock_state,         // Pocket lock (D64): bit0 locked, bit1 lock screen showing
     // firmware load (dev builds: APF data slot over the bridge, D50); used only while the CPU
     // is held in reset, otherwise ignored

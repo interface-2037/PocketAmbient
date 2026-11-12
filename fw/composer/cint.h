@@ -162,6 +162,8 @@ typedef struct {
     uint8_t  alert;
 } mother_t;
 
+typedef union { drift_t d; tides_t t; hush_t h; mother_t o; } mode_state_t;
+
 typedef struct comp comp_t;
 typedef struct {
     const char *name;
@@ -177,6 +179,8 @@ struct comp {
     uint32_t user_seed, sess_seed;
     uint8_t  seed_lock;
     uint64_t now, play_start, state_t;
+    uint64_t sleep_start;           /* the sleep timer counts from here (start, A in its fade, new setting) */
+    uint32_t stop_ms;               /* length of the fade-out in progress */
     uint32_t settings_seq;
     uint32_t menu_seen[4];          /* CR_MODE, CR_DENSITY, CR_BRIGHT, CR_VISUALS as last read (D62) */
     uint8_t  resume_seq;            /* CR_RESUME sequence last handled (D63) */
@@ -187,7 +191,7 @@ struct comp {
     fxset_t  fx_cur, fx_tgt;
     uint32_t fx_ramp;
     uint8_t  m_mode;                /* mode whose state c->m holds; MODE_COUNT = none (D53) */
-    union { drift_t d; tides_t t; hush_t h; mother_t o; } m;
+    mode_state_t m;
 };
 
 extern const mode_ops_t MODE_DRIFT_OPS, MODE_TIDES_OPS, MODE_HUSH_OPS, MODE_MOTHER_OPS;

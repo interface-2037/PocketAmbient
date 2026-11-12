@@ -1,7 +1,7 @@
 /*
  * hal_model.c - Host HAL: composer talks straight to the C synth model.
  * The renderer calls composer_tick() between 48-sample blocks, which gives the
- * same tick-boundary semantics as the hardware's shadow-register commit.
+ * same tick-boundary semantics as the hardware (writes take effect at the next block).
  */
 #include "hal.h"
 #include "hal_model.h"

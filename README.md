@@ -11,7 +11,7 @@ A generative ambient music core for the Analogue Pocket (openFPGA). It plays pro
 
 ## Installing
 
-1. Download the latest `interface2037.AmbientPocket_<version>_<date>.zip` from the
+1. Download the latest `AmbientPocket-<version>.zip` from the
    [Releases](https://github.com/interface-2037/PocketAmbient/releases) page (or install it with
    an updater that reads the [openFPGA Library](https://openfpga-library.github.io/analogue-pocket/)).
 2. Unzip it onto the root of the Pocket's SD card. It adds `Cores/interface2037.AmbientPocket/` and
@@ -138,7 +138,7 @@ for another install. Check `src/fpga/output_files/ap_core.sta.summary` for negat
 python tools/package.py
 ```
 
-This makes `dist/sdcard/` and `dist/AmbientPocket-<version>.zip` (firmware inside the
+This makes `dist/sdcard/` and `dist/AmbientPocket-<version>.zip` (`-dev` in the name for a dev build; firmware inside the
 bitstream). To install, copy the contents of `dist/sdcard/` (or of the zip) to the root of the
 Pocket's SD card, so you get `Cores/interface2037.AmbientPocket/`, `Platforms/ambient.json` and
 `Platforms/_images/ambient.bin`. Power the Pocket fully off and on afterwards: it caches core
