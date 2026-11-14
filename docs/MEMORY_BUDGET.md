@@ -37,11 +37,11 @@ Echo is capped at 750 ms per side (the spec allows up to 800 ms if it fits). Ech
 | Saw + tri wavetables (2 × 10 × 1024 × 16) | 40,960 |
 | Limiter table (1025 × 24) | 3,075 |
 | Pluck delay lines (4 × 2048 × 16) | 16,384 |
-| Voice parameter registers (32 × 32 × 32-bit, shadow + live) | 8,192 |
-| Voice state (32 voices × ~16 words) | 2,048 |
+| Voice parameter registers (32 voices × 32 words × 32 bits, one copy: D48, no shadow) | 4,096 |
+| Voice state (32 voices × 32 words × 32 bits) + status (32 × 32 bits) | 4,224 |
 | Font ROM (8×8, 128 glyphs) | 1,024 |
 | Video (tile/text map, palettes, sprite list) | ~4,096 |
 | FIFOs | ~512 |
-| **Total** | **~150,000 (~39%)** |
+| **Total** | **~148,000 (~38%)** |
 
-**Firmware (measured):** RV32IMC at `-Os`. Phase 4: 38.2 KB image, 7.9 KB `.bss` (composer state, dominated by the 256-entry scheduler heap), 4 KB stack (1.1 KB used at most). With the UI (Phase 5, D52): 47.4 KB image, ~9.6 KB `.bss` (incl. the 1.5 KB UI coroutine stack), 4 KB main stack; everything ends at 0xE7D0, leaving ~6 KB of the 64 KB CPU RAM. **Watch this:** more UI or music code may need the RAM grown to 96 KB or the tables moved to a ROM. Framebuffers (D52): 2 × 5,760 × 32 bits = 46 KB block RAM (~40 M10K). Without compressed instructions (RV32IM) the code alone is 52 KB, which would not leave enough room. Audio FIFO: 1024 × 32 bits (4 KB).
+**Firmware (measured):** RV32IMC at `-Os`. Phase 4: 38.2 KB image, 7.9 KB `.bss` (composer state, dominated by the 256-entry scheduler heap), 4 KB stack. With the UI (Phase 5, D52): 47.4 KB image, ~9.6 KB `.bss` (incl. the 1.5 KB UI coroutine stack), 4 KB main stack; everything ends at 0xE7D0, leaving ~6 KB of the 64 KB CPU RAM. Deepest stack use measured by `rvsim --ui` (all modes, menus, lock screen): 816 of 4,096 bytes on the main stack (TIDES; 512 to 560 in the other modes), 352 of 1,536 bytes on the UI coroutine stack. **Watch this:** more UI or music code may need the RAM grown to 96 KB or the tables moved to a ROM. Framebuffers (D52): 2 × 5,760 × 32 bits = 46 KB block RAM (~40 M10K). Without compressed instructions (RV32IM) the code alone is 52 KB, which would not leave enough room. Audio FIFO: 1024 × 32 bits (4 KB).

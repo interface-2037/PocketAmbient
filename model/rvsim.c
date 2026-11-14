@@ -14,7 +14,7 @@
  *   the frame on screen at those times to <prefix>_<ms>.ppm)   --frame-prefix PATH
  *   --lock SEC (Pocket lock from that time on, D64: CR_LOCK = 3, lock screen showing)
  * Prints instructions per tick (max / mean), an estimate of PicoRV32 cycles and the
- * deepest stack use.
+ * deepest use of the main stack and (with --ui) of the UI coroutine stack.
  *
  * MMIO behaviour mirrors cpu_sys.sv: voice/FX writes go straight to the engine (the engine
  * is idle while the CPU runs a tick), CR_BTN_EVENTS and CR_CMD clear on read, a write to
@@ -35,7 +35,13 @@ static sm_t     g_sm;
 static uint32_t ctrl[CR_NUM_REGS];
 static uint64_t tick, dur_ms;
 static FILE    *out;
-static uint32_t min_sp = RAM_BYTES, top_sp;
+/* Stack depth. The main stack is the STACK_SIZE bytes below _stack_top (fw/rv/link.ld); crt0
+ * sets sp there first, so it is the highest sp ever seen. Any sp further down belongs to the
+ * UI coroutine stack (an array in .bss, fw/rv/main.c), whose top is the sp it starts with.
+ * The two are measured separately: one top - min over both would span .bss. The half-built
+ * sp of a two-instruction `la sp` (auipc/lui) is skipped, or it would count as stack. */
+#define FW_STACK_BYTES 4096u
+static uint32_t main_top, main_min = ~0u, co_top, co_min = ~0u;
 static int64_t  prof_tick = -1;               /* --profile N: PC histogram of tick N */
 static uint32_t prof[RAM_BYTES / 2];
 
@@ -435,8 +441,16 @@ static void step(void)
     default: fail("illegal instruction", i);
     }
     if (wr && rd) x[rd] = r;
-    if (x[2] > top_sp) top_sp = x[2];
-    if (x[2] && x[2] < min_sp) min_sp = x[2];
+    if (x[2] && op != 0x37 && op != 0x17) {
+        uint32_t sp = x[2];
+        if (sp > main_top) main_top = sp;
+        if (sp + FW_STACK_BYTES >= main_top) {
+            if (sp < main_min) main_min = sp;
+        } else {
+            if (sp > co_top) co_top = sp;
+            if (sp < co_min) co_min = sp;
+        }
+    }
     if ((int64_t)tick == prof_tick && pc < RAM_BYTES) prof[pc >> 1]++;
     pc = npc;
     cyc_total += cyc;
@@ -557,9 +571,11 @@ int main(int argc, char **argv)
                (unsigned long long)eng_cycles, max_lag, max_lag / 1546.875);
     if (!quiet)
         printf("rvsim: %zu-byte image, %llu ticks; instructions/tick max %llu (tick %llu) mean %.0f; "
-               "est. PicoRV32 cycles/tick max %llu mean %.0f; stack used %u bytes\n",
+               "est. PicoRV32 cycles/tick max %llu mean %.0f; main stack used %u of %u bytes\n",
                n, (unsigned long long)tick, (unsigned long long)ins_max, (unsigned long long)max_tick_at,
                (double)ins_sum / (double)tick, (unsigned long long)cyc_max, (double)cyc_sum / (double)tick,
-               top_sp - min_sp);
+               main_top - main_min, FW_STACK_BYTES);
+    if (!quiet && co_top)
+        printf("rvsim: UI coroutine stack used %u bytes (top 0x%04x)\n", co_top - co_min, co_top);
     return 0;
 }

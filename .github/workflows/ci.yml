@@ -11,16 +11,18 @@ on:
         type: boolean
         default: false
 
+# Actions are pinned to commit SHAs (release tag in the comment) and the runner image to a
+# fixed Ubuntu release, so CI does not change under us; bump them on purpose.
 permissions:
   contents: read
 
 jobs:
   host:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
       - name: Python deps
@@ -47,7 +49,7 @@ jobs:
         run: EXE= tools/run_validation.sh quick 4
       # The full 8-hour matrix (tools/run_validation.sh full) does not fit a hosted runner's
       # time limit; run it locally.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         if: always()
         with:
           name: reports
@@ -56,10 +58,10 @@ jobs:
             !reports/*/work/
           retention-days: 7
   rtl:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
       - name: Tools
         run: sudo apt-get install -y verilator iverilog
       - name: Framebuffer video unit test
