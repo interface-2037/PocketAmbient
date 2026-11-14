@@ -1,4 +1,4 @@
-# Hardware test: v0.6.1
+# Hardware test: v0.6.1 (passed, 2026-11-14)
 
 Release package (`dist/AmbientPocket-0.6.1.zip`, also laid out in `dist/sdcard`). The firmware is
 baked into the bitstream, so a `composer.bin` left on the card from a dev build is not used.
