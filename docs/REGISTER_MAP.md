@@ -87,7 +87,7 @@ The CPU runs while the engine is idle at a tick boundary, so voice and FX writes
 | 8 | CMD | bridge → CPU | bit0 reseed; clear-on-read |
 | 9 | SETTINGS_SEQ | bridge → CPU | increments on every menu write; the composer re-reads 0–7 when it changes |
 | 10 | BTN_EVENTS | input → CPU | pressed-edge bitmap (synchronised, edge-detected), clear-on-read. Passes through `pocket_lock` (D64): nothing while locked, Start on its release, Select never |
-| 11 | RTC_EPOCH | APF → CPU | |
+| 11 | RTC_EPOCH | APF → CPU | RTC seconds XOR a free-running clk_74a cycle counter (D67): seed entropy, not a clock |
 | 12, 13 | TICK_LO / HI | engine → CPU | 64-bit tick counter |
 | 14 | TICK_DONE | CPU → engine | write: this tick's composer work is done; the engine renders the tick's 48 samples, then increments TICK |
 | 15 | TICK_CYCLES | engine → CPU | CPU cycles used by the previous tick (diagnostic) |

@@ -11,7 +11,8 @@
 // Audio FIFO: 1024 stereo frames. The I2S side pops one frame per frame tick once the FIFO
 // has first filled to PRIME frames (silence before that); an empty FIFO at a pop is an
 // underrun (counted, last frame repeated). The firmware's worst tick needs ~90 frames of
-// lead (model/rvsim.c), so PRIME = 512 leaves a wide margin.
+// lead (model/rvsim.c), so PRIME = 512 leaves a wide margin. A sustained underrun or a CPU
+// fault mutes the output (D67, below).
 //
 // MMIO (fw/hal/regs.h): voice writes 0x1000_0000, voice STATUS reads (word 31; other voice
 // words read 0), FX writes 0x1000_1000 (word 31 reads the fade gain, others 0), control block
@@ -22,7 +23,8 @@
 
 module cpu_sys #(
     parameter FW_HEX = "core/cpu/composer.hex",
-    parameter [10:0] PRIME = 11'd512
+    parameter [10:0] PRIME = 11'd512,
+    parameter  [9:0] MUTE_FRAMES = 10'd480  // 10 ms of empty FIFO in a row: mute (D67)
 ) (
     input  wire        clk,
     input  wire        rst,
@@ -335,22 +337,47 @@ module cpu_sys #(
         if (push) fifo[wp] <= {out_l, out_r};
         fifo_q <= fifo[rp];
     end
-    reg pop_d;
+    // Mute (D67): a CPU fault (trap or bus error, sticky until reset: the red screen) or
+    // MUTE_FRAMES frame ticks in a row with an empty FIFO (a stalled CPU) mutes the output. The
+    // held last frame decays to 0 over ~15 ms (x -= x/128 per frame, then 0 within -128..127) instead
+    // of staying as a DC offset. A stall also un-primes the FIFO, so play resumes only after it
+    // has refilled to PRIME frames; a fault mutes until reset. Short underruns (< MUTE_FRAMES)
+    // still repeat the last frame.
+    reg         pop_d;
+    reg   [9:0] dry;                        // frame ticks in a row with an empty FIFO
+    reg         muted;
+    wire        fault = trap || bus_err;
+    // x - (x >>> 7) with the arithmetic shift written out as a sign extension (plain bit
+    // vectors: Quartus 25.1 crashed in its adder balancing on the signed-wire form)
+    wire [15:0] dl = pcm_l - {{7{pcm_l[15]}}, pcm_l[15:7]};
+    wire [15:0] dr = pcm_r - {{7{pcm_r[15]}}, pcm_r[15:7]};
+    wire        small_l = pcm_l[15:7] == 9'h000 || pcm_l[15:7] == 9'h1FF;   // -128 <= x < 128
+    wire        small_r = pcm_r[15:7] == 9'h000 || pcm_r[15:7] == 9'h1FF;
+    localparam [9:0] DRY_LAST = MUTE_FRAMES - 10'd1;
     always @(posedge clk) begin
         pop_d <= pop;
         if (rst) begin
             wp <= 10'd0; rp <= 10'd0; fifo_level <= 11'd0; primed <= 1'b0; underruns <= 16'd0;
-            fifo_min <= 11'h7FF; pcm_l <= 16'd0; pcm_r <= 16'd0;
+            fifo_min <= 11'h7FF; pcm_l <= 16'd0; pcm_r <= 16'd0; dry <= 10'd0; muted <= 1'b0;
         end else begin
             if (push) wp <= wp + 10'd1;
             if (pop) rp <= rp + 10'd1;
             fifo_level <= fifo_level + {10'd0, push} - {10'd0, pop};
-            if (fifo_level >= PRIME) primed <= 1'b1;
+            if (fifo_level >= PRIME) begin primed <= 1'b1; if (!fault) muted <= 1'b0; end
             if (frame_tick && primed) begin
                 if (fifo_level == 11'd0) underruns <= (underruns == 16'hFFFF) ? underruns : underruns + 16'd1;
                 if (fifo_level < fifo_min) fifo_min <= fifo_level;
+                if (fifo_level != 11'd0) dry <= 10'd0;
+                else if (dry == DRY_LAST) begin dry <= 10'd0; muted <= 1'b1; primed <= 1'b0; end
+                else dry <= dry + 10'd1;
             end
-            if (pop_d) begin pcm_l <= fifo_q[31:16]; pcm_r <= fifo_q[15:0]; end
+            if (fault) muted <= 1'b1;
+            if (muted || fault) begin
+                if (frame_tick) begin
+                    pcm_l <= small_l ? 16'd0 : dl;
+                    pcm_r <= small_r ? 16'd0 : dr;
+                end
+            end else if (pop_d) begin pcm_l <= fifo_q[31:16]; pcm_r <= fifo_q[15:0]; end
         end
     end
 endmodule
