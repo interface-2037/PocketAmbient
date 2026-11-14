@@ -1,8 +1,8 @@
 # Python tools (analysis, table generation, packaging, UI mockups): pip install -r requirements.txt
-# Tested with Python 3.14 and the versions in the comments.
-numpy        # 2.5.3
-scipy        # 1.18.1
-soundfile    # 0.14.0
-pyloudnorm   # 0.2.0
-matplotlib   # 3.11.2
-pillow       # 12.3.0 (tools/ui only)
+# Pinned to the versions these tools were tested with (Python 3.14 locally, 3.12 in CI).
+numpy==2.5.3
+scipy==1.18.1
+soundfile==0.14.0
+pyloudnorm==0.2.0
+matplotlib==3.11.2
+pillow==12.3.0      # tools/ui only
