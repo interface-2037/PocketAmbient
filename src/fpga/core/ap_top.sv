@@ -71,6 +71,16 @@ module ap_top #(
         fw_data <= {bridge_wr_data[7:0], bridge_wr_data[15:8], bridge_wr_data[23:16], bridge_wr_data[31:24]};
     end
 
+    // ------------------------------------------------------------- seed entropy (D67)
+    // With Lock seed off the composer seeds the session from CR_RTC_EPOCH at boot. The RTC is
+    // only whole seconds and may not have arrived yet when composer_init reads it (host command
+    // 0090 has no fixed order against Reset Exit), so the register reads the RTC XOR a cycle
+    // counter that runs from configuration and is never reset: the time the APF takes to load
+    // the core and its files varies by far more than a clock, so the low bits differ every boot.
+    reg  [31:0] ent = 32'd0;
+    always @(posedge clk) ent <= ent + 32'd1;
+    wire [31:0] rtc_mix = rtc_epoch ^ ent;
+
     // ------------------------------------------------------------- system
     wire        m_req, m_we, m_ack;
     wire [16:0] m_addr;
@@ -105,7 +115,7 @@ module ap_top #(
         .cfg_mode(cfg_mode), .cfg_density(cfg_density), .cfg_bright(cfg_bright), .cfg_reverb(cfg_reverb),
         .cfg_visuals(cfg_visuals), .cfg_seed_lock(cfg_seed_lock), .cfg_seed(cfg_seed), .cfg_sleep(cfg_sleep),
         .cmd_reseed(cmd_reseed), .settings_seq(settings_seq), .resume_info(resume_info), .resume_seed(resume_seed),
-        .rtc_epoch(rtc_epoch), .btn_edge(btn_edge), .lock_state({lock_hint, locked}),
+        .rtc_epoch(rtc_mix), .btn_edge(btn_edge), .lock_state({lock_hint, locked}),
         .fw_we(fw_we), .fw_addr(fw_addr), .fw_data(fw_data),
         .vclk(vclk), .vsync(vsync), .vx(vx), .vy(vy), .rgb(rgb), .diag_frame({gap_min, gap_max}),
         .frame_tick(tick), .pcm_l(pcm_l), .pcm_r(pcm_r),
